@@ -1,11 +1,31 @@
-import Image from "next/image";
+import Link from "next/link";
 
-export default function Home() {
+export default function Intro() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        
-      </main>
-    </div>
+    <main className="intro-page">
+      <div className="intro-note top">ОБЕРЕЖНО! ДАЛІ — САЙТ НІКОНОРОВА</div>
+      <div
+        className="intro-art"
+        aria-label="Пластилінова гора з голів — місце для майбутнього GIF або анімації"
+      >
+        <div className="intro-head head-a">◉ ◉</div>
+        <div className="intro-head head-b">● ◉</div>
+        <div className="intro-head head-c">◉ ●</div>
+        <div className="intro-face">
+          <div className="eyes">
+            <span>●</span>
+            <span>●</span>
+          </div>
+          <Link href="/home" className="intro-mouth" aria-label="Увійти на сайт">
+            ВАМ СЮДИ →
+          </Link>
+        </div>
+        <div className="intro-head head-d">◉ ◉</div>
+      </div>
+      <p className="intro-note bottom">Я ПОКАЖУ, НАСКІЛЬКИ ГЛИБОКА РОТОВА НОРА...</p>
+      <Link href="/home" className="intro-skip">
+        Пропустити вступ →
+      </Link>
+    </main>
   );
 }

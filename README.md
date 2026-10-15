@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Сайт Слави Ніконорова — Next.js App Router
 
-## Getting Started
+Стартовий **фронтенд**, створений за наданим описом і візуальним макетом. Це не завершений production-сайт: медіафайли та тексти частково демонстраційні.
 
-First, run the development server:
+## Швидкий старт
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Відкрити http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Маршрути
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| URL             | Сторінка                                         |
+| --------------- | ------------------------------------------------ |
+| `/`             | інтро / майбутня GIF-анімація з входом через рот |
+| `/home`         | головна сторінка з фотоколажем, цитатою й меню   |
+| `/kino`         | шоу-ріл, візитка, епізоди                        |
+| `/teatr`        | вистави                                          |
+| `/moie-kino`    | режисерські роботи                               |
+| `/ya-malyuyu`   | дитячі та дорослі малюнки                        |
+| `/ya-pyshu`     | вірші та есе                                     |
+| `/fotogalereya` | підрозділи фотографій                            |
+| `/exit`         | жартівлива 404                                   |
 
-## Learn More
+## Як заповнювати
 
-To learn more about Next.js, take a look at the following resources:
+- Дані розділів, категорії, назви, описи, обкладинки та URL відео: `lib/content.ts`.
+- Картинки: `public/images/`. Наявні 4 зображення — **тимчасові кропи з наданого користувачем макета**. Замініть оригіналами високої якості.
+- Головний текст і біографія: `app/(site)/home/page.tsx`.
+- Кольори, типографіка, відступи: `app/globals.css`.
+- Інтро поки CSS-макет, замініть на оригінальну GIF/відео/Canvas-анімацію.
+- Під відео використовується `<video src="...">`: додайте поле `video` з URL **прямого MP4** до елемента в `lib/content.ts`. YouTube-URL не працюватиме як MP4 (потрібен окремий embed-player).
+- Есе відкриваються у модальному вікні; ефект розмиття/розгортання з опису — подальший етап.
+- Поле цитати редагується прямо на головній сторінці та зберігається **лише у localStorage поточного браузера**. Для редагування автором із будь-якого пристрою і публікації для всіх відвідувачів потрібні CMS/API, база даних та авторизація.
+- Галерея містить демо-елементи замість реальних 100–150 фотографій.
+- Email `hello@example.com` — заглушка. Замініть актуальними контактами.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Що наступним етапом
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Підключити CMS для цитати та всіх матеріалів (наприклад Sanity/Directus).
+2. Додати авторизацію адміністратора, upload фото/відео, оптимізацію зображень.
+3. Зробити інтро-анімацію за ескізом Слави, а також motion-ефекти рамок/дошки доказів.
+4. Підключити відеоплеєр для обраного відеохостингу й реалізувати SEO/доступність/продуктивність.
