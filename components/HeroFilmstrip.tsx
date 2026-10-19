@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import Image from "next/image";
 
@@ -39,13 +39,11 @@ function mod(n: number, m: number) {
 export function HeroFilmstrip() {
   const [active, setActive] = useState(1);
 
-  const visibleFrames = useMemo(() => {
-    return [
-      frames[mod(active - 1, frames.length)],
-      frames[active],
-      frames[mod(active + 1, frames.length)],
-    ];
-  }, [active]);
+  const visibleFrames = [
+    frames[mod(active - 1, frames.length)],
+    frames[active],
+    frames[mod(active + 1, frames.length)],
+  ];
 
   function prev() {
     setActive((current) => mod(current - 1, frames.length));
@@ -56,115 +54,120 @@ export function HeroFilmstrip() {
   }
 
   return (
-    <aside
-      className="absolute top-1/2 right-6 z-30 hidden h-[560px] w-[190px] -translate-y-1/2 xl:block"
-      aria-label="Кінематографічна навігація"
-    >
-      <div className="relative h-full w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(22,14,12,0.93),rgba(28,16,13,0.97))] shadow-[0_24px_60px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md">
-        {/* мягкий внутренний объём */}
+    <aside className="h-[500px] w-[230px] shrink-0" aria-label="Кінематографічна навігація">
+      <div className="relative h-full w-full overflow-hidden rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(22,14,12,0.93),rgba(28,16,13,0.97))] shadow-[0_24px_60px_rgba(0,0,0,0.3)]">
+        {/* Внутреннее свечение */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-[1px] rounded-[28px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.045),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%,transparent_78%,rgba(255,255,255,0.015))]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.05),transparent_48%)]"
         />
 
-        {/* перфорация слева */}
+        {/* Левая перфорация */}
         <div
           aria-hidden="true"
-          className="absolute inset-y-7 left-[9px] flex flex-col justify-between"
+          className="absolute inset-y-6 left-[9px] flex flex-col justify-between"
         >
-          {Array.from({ length: 12 }).map((_, index) => (
+          {Array.from({ length: 13 }).map((_, index) => (
             <span
               key={`left-${index}`}
-              className="block h-[10px] w-[4px] rounded-[2px] border border-white/12 bg-black/10"
+              className="block h-[9px] w-[4px] rounded-[2px] border border-white/10 bg-black/15"
             />
           ))}
         </div>
 
-        {/* перфорация справа */}
+        {/* Правая перфорация */}
         <div
           aria-hidden="true"
-          className="absolute inset-y-7 right-[9px] flex flex-col justify-between"
+          className="absolute inset-y-6 right-[9px] flex flex-col justify-between"
         >
-          {Array.from({ length: 12 }).map((_, index) => (
+          {Array.from({ length: 13 }).map((_, index) => (
             <span
               key={`right-${index}`}
-              className="block h-[10px] w-[4px] rounded-[2px] border border-white/12 bg-black/10"
+              className="block h-[9px] w-[4px] rounded-[2px] border border-white/10 bg-black/15"
             />
           ))}
         </div>
 
-        {/* центральная колонка */}
-        <div className="relative z-10 flex h-full flex-col px-5 py-5">
-          {/* top button */}
-          <div className="mb-4 flex justify-center">
+        {/* Основное содержимое */}
+        <div className="relative z-10 flex h-full flex-col px-5 py-4">
+          {/* Верхняя кнопка */}
+          <div className="mb-2 flex shrink-0 justify-center">
             <button
               type="button"
               onClick={prev}
               aria-label="Попередній кадр"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/[0.03] text-[var(--color-site-accent)] transition-all duration-300 hover:border-[var(--color-site-accent)] hover:bg-[color:var(--color-site-accent)]/10"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.03] text-site-accent transition-all duration-300 hover:-translate-y-0.5 hover:border-site-accent hover:bg-white/[0.07]"
             >
-              <span className="text-lg leading-none">↑</span>
+              <span className="text-base leading-none">↑</span>
             </button>
           </div>
 
-          {/* frames */}
-          <div className="flex flex-1 flex-col justify-center gap-4">
+          {/* Кадры */}
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
             {visibleFrames.map((frame, index) => {
               const isCenter = index === 1;
-              const frameNumber = mod(active + (index - 1), frames.length) + 1;
+
+              const frameNumber = mod(active + index - 1, frames.length) + 1;
 
               return (
                 <button
                   type="button"
-                  key={`${frame.src}-${frame.title}-${index}`}
+                  key={`${frame.src}-${index}`}
+                  disabled={isCenter}
+                  aria-label={`${frame.title} — ${frame.subtitle ?? ""}`}
                   onClick={() => {
                     if (index === 0) prev();
                     if (index === 2) next();
                   }}
-                  className={`group relative w-full overflow-hidden rounded-[18px] border text-left transition-all duration-300 ${
+                  className={`group relative w-full shrink-0 overflow-hidden rounded-[15px] border text-left transition-all duration-300 ${
                     isCenter
-                      ? "h-[144px] border-white/18 shadow-[0_14px_28px_rgba(0,0,0,0.32)]"
-                      : "h-[122px] border-white/10 opacity-95"
+                      ? "h-[120px] cursor-default border-site-accent/40 shadow-[0_10px_25px_rgba(0,0,0,0.3)]"
+                      : "h-[104px] border-white/10 opacity-80 hover:border-white/25 hover:opacity-100"
                   } `}
                 >
+                  {/* Фото */}
                   <Image
                     src={frame.src}
                     alt={frame.title}
                     fill
                     sizes="190px"
-                    className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                     style={{
                       objectPosition: frame.position ?? "center",
                     }}
                   />
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/20 to-black/10" />
+                  {/* Затемнение */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
 
-                  {/* inner outline */}
+                  {/* Внутренняя рамка */}
                   <div
-                    className={`absolute inset-[7px] rounded-[13px] border ${isCenter ? "border-white/18" : "border-white/10"} `}
+                    className={`pointer-events-none absolute inset-[6px] rounded-[10px] border ${
+                      isCenter ? "border-white/20" : "border-white/10"
+                    } `}
                   />
 
-                  {/* accent line */}
+                  {/* Акцент активного кадра */}
                   {isCenter && (
-                    <div className="absolute top-0 left-0 h-full w-[3px] bg-[var(--color-site-accent)] shadow-[0_0_14px_var(--color-site-accent)]" />
+                    <div className="absolute inset-y-0 left-0 w-[3px] bg-site-accent shadow-[0_0_12px_var(--color-site-accent)]" />
                   )}
 
-                  {/* text */}
+                  {/* Подписи */}
                   <div className="absolute inset-x-0 bottom-0 p-3">
                     <div className="flex items-end justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[11px] font-semibold tracking-[0.14em] text-white">
+                        <p className="text-[11px] font-semibold tracking-[0.12em] text-white">
                           {frame.title}
                         </p>
-                        {frame.subtitle ? (
-                          <p className="mt-1 truncate text-[10px] text-white/58">
+
+                        {frame.subtitle && (
+                          <p className="mt-1 truncate text-[10px] text-white/60">
                             {frame.subtitle}
                           </p>
-                        ) : null}
+                        )}
                       </div>
 
-                      <span className="shrink-0 text-[10px] text-white/55">
+                      <span className="shrink-0 text-[10px] text-white/50">
                         {String(frameNumber).padStart(2, "0")}
                       </span>
                     </div>
@@ -174,19 +177,21 @@ export function HeroFilmstrip() {
             })}
           </div>
 
-          {/* footer */}
-          <div className="mt-4 flex items-center justify-between px-[2px]">
-            <span className="text-[10px] tracking-[0.22em] text-white/45">
-              {String(active + 1).padStart(2, "0")} / {String(frames.length).padStart(2, "0")}
+          {/* Нижняя навигация */}
+          <div className="mt-2 flex shrink-0 items-center justify-between px-[2px]">
+            <span className="text-[10px] tracking-[0.18em] text-white/45">
+              {String(active + 1).padStart(2, "0")}
+              {" / "}
+              {String(frames.length).padStart(2, "0")}
             </span>
 
             <button
               type="button"
               onClick={next}
               aria-label="Наступний кадр"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/[0.03] text-[var(--color-site-accent)] transition-all duration-300 hover:border-[var(--color-site-accent)] hover:bg-[color:var(--color-site-accent)]/10"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.03] text-site-accent transition-all duration-300 hover:translate-y-0.5 hover:border-site-accent hover:bg-white/[0.07]"
             >
-              <span className="text-lg leading-none">↓</span>
+              <span className="text-base leading-none">↓</span>
             </button>
           </div>
         </div>
