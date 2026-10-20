@@ -1,0 +1,246 @@
+// Starter schema. Better Auth CLI will add User, Session, Account,
+// Verification, TwoFactor and RateLimit models. Merge with your existing
+// Prisma schema instead of overwriting it if you already use Prisma.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id               String      @id
+  name             String
+  email            String
+  emailVerified    Boolean     @default(false)
+  image            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  twoFactorEnabled Boolean?    @default(false)
+  role             String?     @default("user")
+  sessions         Session[]
+  accounts         Account[]
+  twofactors       TwoFactor[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id          String   @id
+  expiresAt   DateTime
+  token       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  ipAddress   String?
+  userAgent   String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mfaVerified Boolean? @default(false)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model TwoFactor {
+  id                      String    @id
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean?  @default(true)
+  failedVerificationCount Int?      @default(0)
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("twoFactor")
+}
+
+model RateLimit {
+  id          String @id
+  key         String
+  count       Int
+  lastRequest BigInt
+
+  @@unique([key])
+  @@map("rateLimit")
+}
+
+model SiteStatus {
+  id        String   @id
+  content   String   @db.VarChar(500)
+  updatedAt DateTime @updatedAt
+}
+
+// Append these models to your EXISTING prisma/schema.prisma.
+// Keep your existing Better Auth and SiteStatus models intact.
+
+model MediaAsset {
+  id           String   @id @default(cuid())
+  assetId      String   @unique
+  publicId     String   @unique
+  title        String   @db.VarChar(120)
+  url          String   @db.Text
+  resourceType String   @db.VarChar(12) // image | video
+  category     String   @db.VarChar(32)
+  format       String?  @db.VarChar(20)
+  bytes        Int
+  width        Int?
+  height       Int?
+  duration     Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([category, createdAt])
+
+bioFrames BioFilmFrame[]
+introGameHeads IntroGameHead[]
+creativeItems CreativeItem[] @relation("CreativeItemCover")
+}
+
+// One-time authorization record for an upload, issued by our backend.
+// Prevents the browser from registering a made-up Cloudinary URL.
+model MediaUploadTicket {
+  id           String    @id @default(cuid())
+  publicId     String    @unique
+  category     String    @db.VarChar(32)
+  resourceType String    @db.VarChar(12)
+  issuedById   String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([issuedById, createdAt])
+}
+// Append to your EXISTING prisma/schema.prisma (do not replace your schema).
+
+model BioProfile {
+  id          String         @id
+  heading     String         @default("Трохи про") @db.VarChar(80)
+  accent      String         @default("мене") @db.VarChar(80)
+  lead        String         @db.VarChar(500)
+  description String         @db.Text
+  fullBio     String         @db.Text
+  updatedAt   DateTime       @updatedAt
+  frames      BioFilmFrame[]
+}
+
+model BioFilmFrame {
+  id           String      @id @default(cuid())
+  bioId        String
+  slot         Int
+  title        String      @db.VarChar(40)
+  subtitle     String      @default("") @db.VarChar(100)
+  position     String      @default("center") @db.VarChar(32)
+  mediaAssetId String?
+  bio          BioProfile  @relation(fields: [bioId], references: [id], onDelete: Cascade)
+  mediaAsset   MediaAsset? @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([bioId, slot])
+  @@index([mediaAssetId])
+}
+
+
+model IntroGameSettings {
+  id                 String          @id
+  enabled            Boolean         @default(true)
+  eyebrow            String          @default("Обережно! Далі — сайт Ніконорова") @db.VarChar(120)
+  heading            String          @default("Гра в") @db.VarChar(65)
+  accent             String          @default("голови") @db.VarChar(65)
+  description        String          @default("Кидай мої голови в контейнер. Дві однакові зливаються в одну більшу!") @db.VarChar(700)
+  tagline            String          @default("Я покажу, наскільки глибока ротова нора…") @db.VarChar(200)
+  skipLabel          String          @default("Пропустити вступ") @db.VarChar(60)
+  siteHref           String          @default("/home") @db.VarChar(100)
+  autoModeDefault    Boolean         @default(false)
+  autoIntervalMs     Int             @default(1250)
+  updatedAt          DateTime        @updatedAt
+  heads              IntroGameHead[]
+}
+
+model IntroGameHead {
+  id           String            @id @default(cuid())
+  settingsId   String
+  level        Int
+  mediaAssetId String?
+  settings     IntroGameSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  mediaAsset   MediaAsset?       @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([settingsId, level])
+  @@index([mediaAssetId])
+}
+
+// Add this model to your existing prisma/schema.prisma (DO NOT overwrite other models).
+model CreativeItem {
+  id           String      @id @default(cuid())
+  section      String      @db.VarChar(24)
+  title        String      @db.VarChar(180)
+  subtitle     String?     @db.VarChar(220)
+  description  String?     @db.Text
+  body         String?     @db.Text
+  year         Int?
+  categoryTag  String?     @db.VarChar(80)
+  linkUrl      String?     @db.VarChar(800)
+  mediaAssetId String?
+  mediaAsset   MediaAsset? @relation("CreativeItemCover", fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  published    Boolean     @default(false)
+  sortOrder    Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([section, sortOrder])
+  @@index([published, section, sortOrder])
+  @@index([mediaAssetId])
+}
+
+model SiteContact {
+  id          String   @id @db.VarChar(24) // telegram | instagram | youtube | email | facebook
+  url         String   @db.VarChar(700)
+  description String   @default("") @db.VarChar(140)
+  visible     Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  updatedAt   DateTime @updatedAt
+}
+
+
+
+
+
+
