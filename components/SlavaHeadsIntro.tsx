@@ -4,32 +4,44 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import Link from "next/link";
 
+import {
+  DEFAULT_INTRO,
+  INTRO_HEAD_FALLBACK,
+  INTRO_HEAD_RADII,
+  type IntroPublicConfig,
+} from "@/lib/intro/types";
+
 /**
- * Положи 6 PNG/WebP с прозрачным фоном в public/images/heads/
+ * Положи 11 PNG/WebP с прозрачным фоном в public/images/heads/
  * и замени пути ниже на реальные имена файлов.
  * Каждая следующая фотография — голова следующего размера.
  */
-const HEAD_IMAGES = [
-  "/images/hero-faces/face-01.png",
-  "/images/hero-faces/face-02.png",
-  "/images/hero-faces/face-03.png",
-  "/images/hero-faces/face-04.png",
-  "/images/hero-faces/face-05.png",
-  "/images/hero-faces/face-06.png",
-] as const;
+const HEAD_IMAGES = INTRO_HEAD_FALLBACK;
 
-// Укажи адрес основного сайта. Например, если игра на /intro, это может быть "/".
+// The target route can be configured in the admin editor.
 const SITE_HREF = "/home";
 
 const W = 420;
 const H = 550;
 const DANGER_Y = 86;
-const RADII = [19, 27, 37, 50, 68, 89] as const;
-const COLORS = ["#e7b78b", "#dba380", "#c58c75", "#b87c6b", "#aa786a", "#269685"];
-const MAX_LEVEL = RADII.length - 1;
+const RADII = INTRO_HEAD_RADII;
+const COLORS = [
+  "#e7b78b",
+  "#dba380",
+  "#c58c75",
+  "#b87c6b",
+  "#aa786a",
+  "#c99778",
+  "#af8e7a",
+  "#ad7b69",
+  "#9c7466",
+  "#4d8c7c",
+  "#269685",
+];
+const MAX_LEVEL = RADII.length - 1; // 10 -> eleventh head (level is zero-based)
 const DROP_DELAY_MS = 320;
 
-type GameStatus = "playing" | "lost" | "won";
+type GameStatus = "playing" | "lost";
 type Head = {
   id: number;
   level: number;
@@ -46,14 +58,27 @@ function clamp(n: number, min: number, max: number) {
 
 function newLevel() {
   // Новые головы падают только первых трёх размеров.
-  return Math.floor(Math.random() * 3);
+  // Все остальные уровни, 4–11, доступны только слиянием.
+  return Math.floor(Math.random() * Math.min(3, RADII.length));
 }
 
 function radius(head: Head) {
   return RADII[head.level];
 }
 
-export function HeadsGame() {
+type HeadsGameProps = {
+  headImages?: readonly string[];
+  siteHref?: string;
+  autoStart?: boolean;
+  dropIntervalMs?: number;
+};
+
+export function HeadsGame({
+  headImages = HEAD_IMAGES,
+  siteHref = SITE_HREF,
+  autoStart = false,
+  dropIntervalMs = 1250,
+}: HeadsGameProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const piecesRef = useRef<Head[]>([]);
   const imagesRef = useRef<(HTMLImageElement | null)[]>([]);
@@ -66,12 +91,12 @@ export function HeadsGame() {
   const [next, setNext] = useState(0);
   const [score, setScore] = useState(0);
   const [status, setStatus] = useState<GameStatus>("playing");
-  const [auto, setAuto] = useState(false);
+  const [auto, setAuto] = useState(autoStart);
 
-  const endGame = useCallback((result: "lost" | "won") => {
+  const endGame = useCallback(() => {
     if (statusRef.current !== "playing") return;
-    statusRef.current = result;
-    setStatus(result);
+    statusRef.current = "lost";
+    setStatus("lost");
     setAuto(false);
   }, []);
 
@@ -86,8 +111,8 @@ export function HeadsGame() {
     setNext(0);
     setScore(0);
     setStatus("playing");
-    setAuto(false);
-  }, []);
+    setAuto(autoStart);
+  }, [autoStart]);
 
   const drop = useCallback(() => {
     if (statusRef.current !== "playing") return;
@@ -114,10 +139,11 @@ export function HeadsGame() {
   // Загрузка изображений происходит только в браузере.
   useEffect(() => {
     let cancelled = false;
-    const assets: (HTMLImageElement | null)[] = Array(HEAD_IMAGES.length).fill(null);
+    const assets: (HTMLImageElement | null)[] = Array(headImages.length).fill(null);
     imagesRef.current = assets;
-    HEAD_IMAGES.forEach((src, index) => {
+    headImages.forEach((src, index) => {
       const image = new window.Image();
+      image.crossOrigin = "anonymous";
       image.onload = () => {
         if (!cancelled) assets[index] = image;
       };
@@ -129,7 +155,7 @@ export function HeadsGame() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [headImages]);
 
   // Физика — фиксированные шаги 1/60 сек, чтобы на разных экранах
   // головы падали примерно одинаково.
@@ -187,11 +213,9 @@ export function HeadsGame() {
             const minDistance = radius(a) + radius(b);
             if (distance >= minDistance) continue;
 
-            if (a.level === b.level && a.age > 10 && b.age > 10) {
-              if (a.level === MAX_LEVEL) {
-                endGame("won");
-                return;
-              }
+            // Two matching heads combine, except for the eleventh (maximum) level.
+            // At level 11 the heads remain in the container until it fills up.
+            if (a.level === b.level && a.level < MAX_LEVEL && a.age > 10 && b.age > 10) {
               const upgradedLevel = a.level + 1;
               const r = RADII[upgradedLevel];
               const combined: Head = {
@@ -250,7 +274,7 @@ export function HeadsGame() {
         (p) => p.age > 48 && p.y - radius(p) < DANGER_Y && Math.abs(p.vy) < 1.2,
       );
       overflowRef.current = overfilled ? overflowRef.current + 1 : 0;
-      if (overflowRef.current > 100) endGame("lost");
+      if (overflowRef.current > 100) endGame();
     }
 
     function drawHead(head: Head, opacity = 1) {
@@ -357,9 +381,9 @@ export function HeadsGame() {
         ? target.x + (Math.random() - 0.5) * 28
         : 30 + Math.random() * (W - 60);
       drop();
-    }, 1250);
+    }, dropIntervalMs);
     return () => window.clearInterval(interval);
-  }, [auto, status, drop]);
+  }, [auto, status, drop, dropIntervalMs]);
 
   // Клавиатура: влево / вправо — прицел, пробел — бросить.
   useEffect(() => {
@@ -394,7 +418,10 @@ export function HeadsGame() {
           Голови зібрано: <b className="ml-2 text-[#e9b080]">{score}</b>
         </div>
         <div className="text-xs tracking-[0.18em] uppercase">
-          Далі: <b className="text-[#3eb29b]">{next + 1} рівень</b>
+          Далі:{" "}
+          <b className="text-[#3eb29b]">
+            {next + 1} / {RADII.length}
+          </b>
         </div>
       </div>
 
@@ -414,13 +441,9 @@ export function HeadsGame() {
 
         {status !== "playing" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#160e0c]/90 px-8 text-center backdrop-blur-sm">
-            <h3 className="font-serif text-4xl text-[#f0dfcf]">
-              {status === "won" ? "Усі образи зібрано!" : "Головам стало тісно!"}
-            </h3>
+            <h3 className="font-serif text-4xl text-[#f0dfcf]">Головам стало тісно!</h3>
             <p className="mt-4 text-sm leading-6 text-[#c1a59a]">
-              {status === "won"
-                ? "Ти об’єднав найбільші голови. Час зазирнути на сайт."
-                : "Спробуй іще раз — або заходь на сайт."}
+              Спробуй іще раз — або заходь на сайт.
             </p>
             <button
               type="button"
@@ -431,7 +454,7 @@ export function HeadsGame() {
             </button>
             <Link
               className="mt-5 text-sm text-[#e7c4a9] underline underline-offset-4"
-              href={SITE_HREF}
+              href={siteHref}
             >
               Увійти на сайт →
             </Link>
@@ -441,7 +464,7 @@ export function HeadsGame() {
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-[260px] text-xs leading-5 text-[#c6a99b]">
-          Клацай або торкайся, щоб кинути голову. Дві однакові → одна більша.
+          Клацай або торкайся, щоб кинути голову. Дві однакові → одна більша, до 11-го рівня.
         </p>
         <div className="flex gap-2">
           <button
@@ -465,30 +488,35 @@ export function HeadsGame() {
   );
 }
 
-// Полноэкранная вступительная страница.
-export default function SlavaHeadsIntro() {
+// Fullscreen intro. Settings are supplied by a Server Component (app/intro/page.tsx).
+// Game mechanics above remain the original collision/merge system.
+export default function SlavaHeadsIntro({ intro = DEFAULT_INTRO }: { intro?: IntroPublicConfig }) {
+  const headImages = intro.heads.map((head) => head.url);
   return (
     <main className="min-h-dvh bg-[radial-gradient(ellipse_at_50%_38%,#493027_0%,#241813_55%,#1a1210_100%)] px-5 py-10 text-[#eed9cb] sm:px-8">
       <div className="mx-auto flex max-w-[1120px] flex-col items-center gap-8 lg:grid lg:min-h-[calc(100dvh-5rem)] lg:grid-cols-[minmax(0,1fr)_460px] lg:items-center lg:gap-16">
         <div className="max-w-[520px] text-center lg:text-left">
-          <p className="mb-5 text-xs tracking-[0.25em] text-[#e4bda8] uppercase">
-            Обережно! Далі — сайт Ніконорова
-          </p>
+          <p className="mb-5 text-xs tracking-[0.25em] text-[#e4bda8] uppercase">{intro.eyebrow}</p>
           <h1 className="font-serif text-[clamp(3.1rem,6vw,6.2rem)] leading-[0.98] tracking-[-0.05em]">
-            Гра в <span className="text-[#2da48e] italic">голови</span>
+            {intro.heading} <span className="text-[#2da48e] italic">{intro.accent}</span>
           </h1>
-          <p className="mt-7 max-w-[440px] text-base leading-7 text-[#d4b5a4]">
-            Тут кожен образ має значення. Кидай мої голови в контейнер: дві однакові зливаються в
-            одну більшу. І так, поки головам не стане затісно.
+          <p className="mt-7 max-w-[440px] text-base leading-7 whitespace-pre-wrap text-[#d4b5a4]">
+            {intro.description}
           </p>
+          <p className="mt-5 font-serif text-lg text-[#eccbb3] italic">{intro.tagline}</p>
           <Link
-            href={SITE_HREF}
+            href={intro.siteHref}
             className="mt-8 inline-flex items-center gap-3 rounded-full border border-[#b38b76] px-6 py-3 text-sm transition hover:border-[#2da48e] hover:text-[#55bba7]"
           >
-            Пропустити вступ <span aria-hidden>↗</span>
+            {intro.skipLabel} <span aria-hidden>↗</span>
           </Link>
         </div>
-        <HeadsGame />
+        <HeadsGame
+          headImages={headImages}
+          siteHref={intro.siteHref}
+          autoStart={intro.autoModeDefault}
+          dropIntervalMs={intro.autoIntervalMs}
+        />
       </div>
     </main>
   );

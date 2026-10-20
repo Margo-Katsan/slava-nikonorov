@@ -6,6 +6,7 @@ import { DailyQuote } from "@/components/DailyQuote";
 import { HeroFaces } from "@/components/HeroFaces";
 import { HeroFilmstrip } from "@/components/HeroFilmstrip";
 import { ArrowUpRight } from "@/components/Icons";
+import { TodayThought } from "@/components/TodayThought";
 
 import { sections } from "@/lib/content";
 
@@ -133,7 +134,7 @@ export default function Home() {
 
                 <div className="border-l border-site-accent/65 pl-5">
                   <div className="[&_.quote-frame-lines]:!hidden [&_.quote-sketch]:!m-0 [&_.quote-sketch]:!max-w-none [&_.quote-sketch]:!border-0 [&_.quote-sketch]:!bg-transparent [&_.quote-sketch]:!p-0 [&_.quote-sketch]:!shadow-none [&_.quote-sketch_p]:!font-serif [&_.quote-sketch_p]:!text-[17px] [&_.quote-sketch_p]:!leading-[1.7] [&_.quote-sketch_p]:!text-site-cream [&_.quote-sketch_p]:!italic [&_.quote-top]:!mb-3 [&_.quote-top]:!text-site-muted [&_.quote-top_button]:!text-site-muted">
-                    <DailyQuote />
+                    <TodayThought />
                   </div>
                 </div>
               </div>
