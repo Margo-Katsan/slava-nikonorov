@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { BioSection } from "@/components/BioSection";
 import { ContactSection } from "@/components/ContactSection";
 import { DailyQuote } from "@/components/DailyQuote";
 import { HeroFaces } from "@/components/HeroFaces";
@@ -230,65 +231,7 @@ export default function Home() {
 
       {/* ABOUT */}
 
-      <section
-        id="bio"
-        className="relative mx-auto w-full max-w-[1440px] scroll-mt-24 px-5 sm:px-8 lg:px-14"
-      >
-        <div className="relative border-t border-site-border/45 py-12 lg:py-14">
-          <div className="mx-auto grid w-full max-w-[940px] grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-8 xl:gap-10">
-            {/* ЛЕВАЯ ЧАСТЬ — ВСЯ БИОГРАФИЯ */}
-            <div className="max-w-[750px] min-w-0">
-              {/* Метка */}
-              <div className="mb-6 flex items-center gap-4">
-                <span className="h-px w-9 bg-site-accent" />
-
-                <span className="text-[10px] font-semibold tracking-[0.24em] text-site-accent uppercase">
-                  Про мене
-                </span>
-              </div>
-
-              {/* Заголовок */}
-              <h2 className="font-serif text-[clamp(3.4rem,5.4vw,5.8rem)] leading-[0.98] font-normal tracking-[-0.055em] text-site-cream">
-                Трохи про
-                <span className="mt-1 block text-site-accent italic">мене</span>
-              </h2>
-
-              {/* Декоративная линия */}
-              <div className="mt-7 flex items-center gap-3">
-                <span className="h-[2px] w-12 bg-site-accent" />
-                <span className="h-px w-20 bg-site-border" />
-              </div>
-
-              {/* Главный текст */}
-              <p className="mt-7 max-w-[620px] font-serif text-[clamp(1.3rem,2vw,1.7rem)] leading-[1.5] text-site-cream">
-                Мені цікаво приміряти різні ролі, розповідати історії та шукати незвичайне у
-                звичайному.
-              </p>
-
-              {/* Описание */}
-              <p className="mt-5 max-w-[590px] text-[14px] leading-[1.9] text-site-muted sm:text-[15px]">
-                Кіно, театр, власні відеороботи, малюнки й тексти — різні способи побачити світ і
-                поділитися ним. Тут поступово з'являтимуться історії, роботи, спогади та інші цікаві
-                речі.
-              </p>
-
-              {/* Подпись */}
-              <div className="mt-8 flex items-center gap-3">
-                <span className="h-px w-9 bg-site-accent/70" />
-
-                <span className="text-[10px] tracking-[0.2em] text-site-muted uppercase">
-                  Далі буде...
-                </span>
-              </div>
-            </div>
-
-            {/* ПРАВАЯ ЧАСТЬ — КИНОПЛЁНКА */}
-            <div className="hidden lg:flex lg:justify-start">
-              <HeroFilmstrip />
-            </div>
-          </div>
-        </div>
-      </section>
+      <BioSection />
       <ContactSection />
 
       {/* PAGE END DECOR */}

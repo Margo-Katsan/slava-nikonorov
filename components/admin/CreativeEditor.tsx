@@ -4,6 +4,7 @@ import { type FormEvent, type ReactNode, useState } from "react";
 
 import { Check, X } from "lucide-react";
 
+import { CreativeCategorySelect } from "@/components/admin/CreativeCategorySelect";
 import { CreativeMediaPicker } from "@/components/admin/CreativeMediaPicker";
 import { WritingRichTextEditor } from "@/components/admin/WritingRichTextEditor";
 
@@ -237,12 +238,7 @@ export function CreativeEditor({ slug, editing, media, onClose, onSaved }: Props
               maxLength={220}
             />
             <Field label="Рік" name="year" type="number" defaultValue={existing?.year} />
-            <Field
-              label="Жанр / формат"
-              name="categoryTag"
-              defaultValue={existing?.categoryTag}
-              maxLength={80}
-            />
+            <CreativeCategorySelect slug="cinema" defaultValue={existing?.categoryTag} />
             <Field
               label="Посилання на трейлер / фільм"
               name="linkUrl"
@@ -371,13 +367,16 @@ export function CreativeEditor({ slug, editing, media, onClose, onSaved }: Props
           />
           <Field label="Назва роботи (необов'язково)" name="title" defaultValue={titleValue} />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Техніка / матеріал"
-              name="categoryTag"
-              maxLength={80}
-              defaultValue={existing?.categoryTag}
-              placeholder="Олія, акварель, олівець..."
-            />
+            <div className="space-y-4">
+              <CreativeCategorySelect slug="painting" defaultValue={existing?.categoryTag} />
+              <Field
+                label="Техніка / матеріал (необов'язково)"
+                name="subtitle"
+                maxLength={220}
+                defaultValue={existing?.subtitle}
+                placeholder="Олія, акварель, олівець..."
+              />
+            </div>
             <Field
               label="Рік (необов'язково)"
               name="year"
@@ -410,13 +409,7 @@ export function CreativeEditor({ slug, editing, media, onClose, onSaved }: Props
             defaultValue={existing?.subtitle}
             maxLength={220}
           />
-          <Field
-            label="Альбом / тема"
-            name="categoryTag"
-            defaultValue={existing?.categoryTag}
-            maxLength={80}
-            placeholder="Портрети, за лаштунками..."
-          />
+          <CreativeCategorySelect slug="gallery" defaultValue={existing?.categoryTag} />
         </div>
       )}
 
