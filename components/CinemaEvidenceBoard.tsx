@@ -1,217 +1,73 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
-import { ArrowUpRight, ChevronLeft, ChevronRight, Play, X } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Film, Play, X } from "lucide-react";
 import Image from "next/image";
 
 import type { Item, Section } from "@/lib/content";
 
-type Spot = { x: number; y: number; w: number; h: number; angle: number };
+type VideoSource =
+  | { kind: "iframe"; src: string }
+  | { kind: "file"; src: string }
+  | { kind: "link"; src: string }
+  | null;
 
-type EvidenceCard = { id: string; item: Item; number: number; spot: Spot };
-
-type PaperNote = { id: string; kind: "question" | "clue"; spot: Spot };
-
-type Wire = { from: string; to: string };
-
-type BoardLayout = {
-  height: number;
-
-  cards: EvidenceCard[];
-
-  notes: PaperNote[];
-
-  wires: Wire[];
+type BoardContent = {
+  all: Item[];
+  showreels: Item[];
+  businessCards: Item[];
+  episodes: Item[];
 };
 
-type TemplateSpot = { x: number; y: number; w: number; angle: number };
-
-// Композиция намеренно асимметричная, но без случайных скачков при перерендере.
-
-const WIDE_SCENE: TemplateSpot[] = [
-  { x: 0.045, y: 0.12, w: 0.34, angle: -4.2 },
-
-  { x: 0.61, y: 0.045, w: 0.32, angle: 3.3 },
-
-  { x: 0.325, y: 0.375, w: 0.3, angle: 2.7 },
-
-  { x: 0.72, y: 0.415, w: 0.24, angle: -3.8 },
-
-  { x: 0.067, y: 0.715, w: 0.3, angle: 3.2 },
-
-  { x: 0.505, y: 0.765, w: 0.37, angle: -3.0 },
-];
-
-const MID_SCENE: TemplateSpot[] = [
-  { x: 0.055, y: 0.085, w: 0.49, angle: -3.6 },
-
-  { x: 0.52, y: 0.29, w: 0.42, angle: 3.0 },
-
-  { x: 0.1, y: 0.705, w: 0.44, angle: 2.7 },
-
-  { x: 0.48, y: 1.025, w: 0.46, angle: -3.4 },
-];
-
-const SMALL_SCENE: TemplateSpot[] = [
-  { x: 0.05, y: 0.09, w: 0.76, angle: -2.8 },
-
-  { x: 0.215, y: 0.685, w: 0.73, angle: 2.6 },
-
-  { x: 0.055, y: 1.305, w: 0.75, angle: -2.5 },
-
-  { x: 0.2, y: 1.92, w: 0.73, angle: 3.0 },
-];
-
-function makeLayout(items: Item[], width: number): BoardLayout {
-  if (width <= 0 || !items.length) {
-    return { height: 260, cards: [], notes: [], wires: [] };
-  }
-
-  const small = width < 560;
-
-  const mid = width >= 560 && width < 920;
-
-  const template = small ? SMALL_SCENE : mid ? MID_SCENE : WIDE_SCENE;
-
-  const perScene = template.length;
-
-  const sceneStep = (small ? 2.58 : mid ? 1.52 : 1.25) * width;
-  // Только один большой зазор между первой и второй группами.
-  // Все фотографии внутри групп остаются на прежних местах относительно друг друга.
-  const firstGapReduction = small ? 0 : Math.min(205, width * (mid ? 0.1 : 0.17));
-  const sceneOffset = (scene: number) => scene * sceneStep - (scene > 0 ? firstGapReduction : 0);
-
-  const cards: EvidenceCard[] = [];
-
-  const notes: PaperNote[] = [];
-
-  const wires: Wire[] = [];
-
-  let bottom = 0;
-
-  items.forEach((item, index) => {
-    const scene = Math.floor(index / perScene);
-
-    const base = template[index % perScene];
-
-    const mirrored = !small && scene % 2 === 1;
-
-    const w = base.w * width;
-
-    const h = Math.round(w * (small ? 0.68 : 0.7) + (small ? 65 : 72));
-
-    const spot: Spot = {
-      x: (mirrored ? 1 - base.x - base.w : base.x) * width,
-
-      y: sceneOffset(scene) + base.y * width,
-
-      w,
-
-      h,
-
-      angle: mirrored ? -base.angle : base.angle,
-    };
-
-    cards.push({ id: `card-${index}`, item, number: index + 1, spot });
-
-    bottom = Math.max(bottom, spot.y + h);
-  });
-
-  const scenes = Math.ceil(items.length / perScene);
-
-  for (let scene = 0; scene < scenes; scene++) {
-    const start = scene * perScene;
-
-    const count = Math.min(perScene, items.length - start);
-
-    const y0 = sceneOffset(scene);
-
-    const mirrored = !small && scene % 2 === 1;
-
-    // Не «паутина»: максимум 2–3 соединения на группу фотографий.
-
-    if (small) {
-      if (count >= 2) wires.push({ from: `card-${start}`, to: `card-${start + 1}` });
-
-      if (count >= 4) wires.push({ from: `card-${start + 2}`, to: `card-${start + 3}` });
-    } else if (mid) {
-      if (count >= 2) wires.push({ from: `card-${start}`, to: `card-${start + 1}` });
-
-      if (count >= 4) wires.push({ from: `card-${start + 1}`, to: `card-${start + 3}` });
-    } else {
-      if (count >= 3) wires.push({ from: `card-${start}`, to: `card-${start + 2}` });
-
-      if (count >= 5) wires.push({ from: `card-${start + 2}`, to: `card-${start + 4}` });
-
-      if (count >= 4) wires.push({ from: `card-${start + 1}`, to: `card-${start + 3}` });
-    }
-
-    // Одна бумажная заметка вместо множества декоративных обрывков.
-
-    const noteWidth = width * (small ? 0.185 : mid ? 0.16 : 0.125);
-
-    const nx = small ? (scene % 2 ? 0.045 : 0.76) : mid ? 0.76 : 0.44;
-
-    const spot: Spot = {
-      x: (mirrored ? 1 - nx - noteWidth / width : nx) * width,
-
-      y: y0 + width * (small ? 0.49 : mid ? 0.045 : 0.11),
-
-      w: noteWidth,
-
-      h: Math.max(small ? 62 : 80, noteWidth * (small ? 1.05 : 0.82)),
-
-      angle: scene % 2 ? -4.5 : 4.5,
-    };
-
-    const noteId = `note-${scene}`;
-
-    notes.push({ id: noteId, kind: scene % 2 ? "clue" : "question", spot });
-
-    // Один штрих от заметки, без «звёздочки» из трёх нитей.
-
-    if (count > 0) {
-      wires.push({
-        from: noteId,
-
-        to: `card-${start + (small ? 0 : Math.min(count - 1, 1))}`,
-      });
-    }
-
-    bottom = Math.max(bottom, spot.y + spot.h);
-  }
-
-  return {
-    cards,
-
-    notes,
-
-    wires,
-
-    height: Math.ceil(bottom + (small ? 65 : 90)),
-  };
+const PAPER = {
+  backgroundColor: "#e5d4bd",
+  backgroundImage:
+    "repeating-linear-gradient(12deg,rgba(81,51,32,.025) 0px,rgba(81,51,32,.025) 1px,transparent 1px,transparent 5px),linear-gradient(145deg,rgba(255,255,255,.26),transparent 65%)",
+};
+
+function categoryOf(group: string, item: Item): "showreel" | "business" | "episode" {
+  const text = `${group} ${item.category ?? ""} ${item.title} ${item.id}`.toLocaleLowerCase("uk");
+  if (/шоур[іi]л|showreel/.test(text)) return "showreel";
+  if (/візитк|визитк|business card|\bintro\b/.test(text)) return "business";
+  return "episode";
 }
 
-// Центр верхнего края повёрнутого листа — место для кнопки.
+function buildContent(section: Section): BoardContent {
+  const all: Item[] = [];
+  const showreels: Item[] = [];
+  const businessCards: Item[] = [];
+  const episodes: Item[] = [];
+  const used = new Set<string>();
 
-function pinPoint(spot: Spot) {
-  const radians = (spot.angle * Math.PI) / 180;
+  for (const group of section.groups) {
+    for (const item of group.items) {
+      // Убираем случайные дубли, но не меняем порядок из Neon.
+      if (used.has(item.id)) continue;
+      used.add(item.id);
+      all.push(item);
 
-  return {
-    x: spot.x + spot.w / 2 + (spot.h / 2) * Math.sin(radians),
+      const category = categoryOf(group.title, item);
+      if (category === "showreel") showreels.push(item);
+      else if (category === "business") businessCards.push(item);
+      else episodes.push(item);
+    }
+  }
 
-    y: spot.y + (spot.h / 2) * (1 - Math.cos(radians)),
-  };
+  return { all, showreels, businessCards, episodes };
 }
 
-function videoEmbed(url: string): string | null {
+function getVideoSource(url?: string): VideoSource {
+  if (!url) return null;
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    return { kind: "file", src: url };
+  }
+
   try {
     const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return null;
 
     const host = parsed.hostname.toLowerCase();
-
     let youtubeId: string | null = null;
 
     if (host === "youtu.be" || host === "www.youtu.be") {
@@ -226,685 +82,387 @@ function videoEmbed(url: string): string | null {
     }
 
     if (youtubeId && /^[\w-]{11}$/.test(youtubeId)) {
-      return `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&rel=0`;
+      return { kind: "iframe", src: `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0` };
     }
 
     if (["vimeo.com", "www.vimeo.com", "player.vimeo.com"].includes(host)) {
-      const vimeoId = parsed.pathname.match(/^\/(?:video\/)?(\d+)/)?.[1];
-
-      if (vimeoId) return `https://player.vimeo.com/video/${vimeoId}?autoplay=1`;
+      const vimeoId = parsed.pathname.match(/\/(?:video\/)?(\d+)/)?.[1];
+      if (vimeoId) return { kind: "iframe", src: `https://player.vimeo.com/video/${vimeoId}` };
     }
+
+    if (
+      /\.(mp4|webm|ogg)$/i.test(parsed.pathname) ||
+      (host === "res.cloudinary.com" && parsed.pathname.includes("/video/upload/"))
+    ) {
+      return { kind: "file", src: url };
+    }
+
+    return { kind: "link", src: url };
   } catch {
-    // Локальное видео /videos/film.mp4 откроется обычным video-плеером.
+    return null;
   }
-
-  return null;
 }
 
-function useBoardWidth() {
-  const ref = useRef<HTMLDivElement>(null);
-
-  const [width, setWidth] = useState(0);
-
-  useEffect(() => {
-    const element = ref.current;
-
-    if (!element) return;
-
-    const update = () => setWidth(element.getBoundingClientRect().width);
-
-    update();
-
-    const observer = new ResizeObserver(update);
-
-    observer.observe(element);
-
-    return () => observer.disconnect();
-  }, []);
-
-  return { ref, width };
-}
-
-function EvidencePhoto({
-  data,
-
-  onOpen,
-}: {
-  data: EvidenceCard;
-
-  onOpen: (item: Item, element: HTMLButtonElement) => void;
-}) {
-  const { spot, item, number } = data;
-
+function Pin({ teal = false }: { teal?: boolean }) {
   return (
-    <article
-      className="absolute origin-center"
-
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute -top-[9px] left-1/2 z-20 h-[18px] w-[18px] -translate-x-1/2 rounded-full border border-[#38221a] shadow-[1px_4px_5px_rgba(0,0,0,.65)]"
       style={{
-        left: spot.x,
-
-        top: spot.y,
-
-        width: spot.w,
-
-        height: spot.h,
-
-        transform: `rotate(${spot.angle}deg)`,
-
-        zIndex: 10 + (number % 4),
+        background: teal
+          ? "radial-gradient(circle at 30% 25%,#b0ebe0 0%,#2da58e 32%,#145449 75%,#0a342c 100%)"
+          : "radial-gradient(circle at 30% 25%,#f5d4a1 0%,#bb7851 32%,#743922 74%,#391d17 100%)",
       }}
+    />
+  );
+}
+
+function TornLabel({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="relative mx-auto my-7 w-fit max-w-full px-5 py-2 text-center font-serif text-sm font-semibold tracking-[.12em] text-[#34251d] shadow-[2px_5px_10px_rgba(0,0,0,.35)] sm:text-base"
+      style={{ ...PAPER, clipPath: "polygon(1% 5%,97% 0%,100% 90%,3% 100%,0% 80%)" }}
     >
+      <span
+        aria-hidden="true"
+        className="absolute top-1/2 left-2 size-1.5 -translate-y-1/2 rounded-full bg-[#76472f]"
+      />
+      {children}
+    </div>
+  );
+}
+
+function EvidenceCard({
+  item,
+  active,
+  prominent = false,
+  onSelect,
+}: {
+  item: Item;
+  active: boolean;
+  prominent?: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="relative min-w-0 pt-2">
+      <Pin teal={active} />
       <button
         type="button"
-
-        onClick={(event) => onOpen(item, event.currentTarget)}
-
+        onClick={() => onSelect(item.id)}
+        aria-pressed={active}
         aria-label={`Переглянути: ${item.title}`}
-
-        className="group relative flex h-full w-full flex-col overflow-hidden border border-[#b6aa9b] bg-[#e7dfd3] p-[6px] text-left transition-[transform,box-shadow] duration-300 outline-none hover:scale-[1.025] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-site-accent sm:p-[8px]"
-
-        style={{
-          boxShadow: "0 17px 28px rgba(0,0,0,.38), 0 3px 7px rgba(0,0,0,.30)",
-
-          backgroundImage:
-            "linear-gradient(135deg,rgba(255,255,255,.22),transparent 55%,rgba(90,64,40,.07))",
-        }}
+        className={`group relative block w-full min-w-0 border p-[5px] text-left shadow-[3px_9px_16px_rgba(0,0,0,.45)] transition-transform duration-200 hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#35b69b] sm:p-2 ${
+          active ? "border-[#35b69b] ring-2 ring-[#35b69b]/55" : "border-[#b49c84]"
+        }`}
+        style={PAPER}
       >
-        <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-[#171819]">
+        <div
+          className={`relative w-full overflow-hidden bg-[#211915] ${prominent ? "aspect-[16/10]" : "aspect-[4/3]"}`}
+        >
           {item.image ? (
             <Image
               src={item.image}
-
-              alt=""
-
+              alt={item.title}
               fill
-
-              sizes="(max-width: 559px) 78vw, (max-width: 919px) 48vw, 36vw"
-
-              className="object-cover transition-transform duration-500 group-hover:scale-[1.045]"
-
-              style={{ filter: "grayscale(.34) sepia(.12) contrast(1.05)" }}
+              sizes={
+                prominent ? "(max-width: 640px) 48vw, 350px" : "(max-width: 640px) 45vw, 200px"
+              }
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
-            <div className="flex h-full items-center justify-center font-serif text-5xl text-[#9c9387]">
-              ?
+            <div className="flex h-full items-center justify-center font-serif text-3xl text-[#ad9581]">
+              КІНО
             </div>
           )}
-
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/5" />
-
-          <span className="absolute bottom-2 left-2 flex size-8 items-center justify-center rounded-full border border-[#eee2d3]/50 bg-[#191715]/75 text-[#f3e8de] transition-colors group-hover:bg-site-accent group-hover:text-site-bg sm:size-10">
-            <Play size={15} fill="currentColor" className="ml-[2px]" />
-          </span>
-
-          <span className="absolute top-2 right-2 bg-[#1b1916]/75 px-1.5 py-1 font-mono text-[10px] tracking-widest text-[#f1e8dd]">
-            {String(number).padStart(2, "0")}
-          </span>
+          {item.video && (
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="flex size-10 items-center justify-center rounded-full border border-[#f2dfc9] bg-[#1b1310]/70 text-[#f2dfc9] shadow-lg sm:size-12">
+                <Play size={20} className="ml-0.5" fill="currentColor" />
+              </span>
+            </span>
+          )}
         </div>
-
-        <div className="flex h-[60px] shrink-0 items-center justify-between gap-2 px-1 pt-1 sm:h-[64px] sm:px-2">
-          <div className="min-w-0">
-            <h3 className="truncate font-serif text-[15px] leading-tight text-[#302721] sm:text-[19px]">
-              {item.title}
-            </h3>
-
-            <p className="mt-0.5 truncate font-mono text-[8px] tracking-[.06em] text-[#7f7061] uppercase sm:text-[9px]">
-              {item.description || "Матеріал із кіноархіву"}
+        <div className="min-w-0 px-1 pt-2 pb-1 sm:px-2">
+          <p
+            className={`line-clamp-2 font-serif leading-tight font-semibold break-words text-[#32231b] ${prominent ? "text-base sm:text-lg" : "text-sm sm:text-base"}`}
+          >
+            {item.title}
+          </p>
+          {item.category && (
+            <p className="mt-1 truncate text-[10px] tracking-[.04em] text-[#695346]">
+              {item.category}
             </p>
-          </div>
-
-          <ArrowUpRight size={15} className="shrink-0 text-[#857363]" />
+          )}
         </div>
       </button>
+    </div>
+  );
+}
+
+function FeaturedWork({
+  item,
+  index,
+  total,
+  onClose,
+  onMove,
+}: {
+  item: Item | null;
+  index: number;
+  total: number;
+  onClose: () => void;
+  onMove: (offset: number) => void;
+}) {
+  const video = getVideoSource(item?.video);
+
+  if (!item) {
+    return (
+      <div className="flex min-h-60 items-center justify-center border border-[#896b53]/50 bg-[#231914] p-8 text-center font-serif text-[#dbc6b0]">
+        Обери матеріал на дошці, щоб побачити його тут.
+      </div>
+    );
+  }
+
+  return (
+    <article className="min-w-0 border border-[#8d6b51]/65 bg-[#1c1512] p-2 shadow-[0_18px_40px_rgba(0,0,0,.4)] sm:p-3">
+      <div className="flex items-start justify-between gap-3 px-2 pt-2 pb-3 sm:px-3">
+        <div className="min-w-0">
+          <p className="text-[10px] tracking-[.23em] text-[#35b69b]">АРХІВ / ОБРАНА РОБОТА</p>
+          <h3 className="mt-2 font-serif text-2xl leading-tight break-words text-[#f0dfcd] sm:text-3xl">
+            {item.title}
+          </h3>
+          {item.category && <p className="mt-1 text-xs text-[#bba28c]">{item.category}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Закрити перегляд"
+          className="shrink-0 rounded-sm border border-[#78563c] p-2 text-[#edd7c0] hover:bg-[#3b2b22]"
+        >
+          <X size={19} />
+        </button>
+      </div>
+
+      <div className="relative aspect-video w-full overflow-hidden bg-[#120e0c]">
+        {video?.kind === "iframe" ? (
+          <iframe
+            key={item.id}
+            src={video.src}
+            title={item.title}
+            allow="encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            className="absolute inset-0 h-full w-full"
+          />
+        ) : video?.kind === "file" ? (
+          <video
+            key={item.id}
+            src={video.src}
+            controls
+            playsInline
+            preload="metadata"
+            poster={item.image}
+            className="h-full w-full object-contain"
+          />
+        ) : item.image ? (
+          <Image
+            src={item.image}
+            alt={item.title}
+            fill
+            sizes="(max-width: 1024px) 100vw, 44vw"
+            className="object-contain"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center font-serif text-3xl text-[#947c69]">
+            Кіноархів
+          </div>
+        )}
+      </div>
+
+      <div className="relative mt-2 min-w-0 p-4 text-[#39291f] sm:p-6" style={PAPER}>
+        <Pin teal />
+        {item.description ? (
+          <p className="font-serif text-base leading-relaxed break-words whitespace-pre-line sm:text-lg">
+            {item.description}
+          </p>
+        ) : (
+          <p className="font-serif text-[#8a7564] italic">Опис поки не додано.</p>
+        )}
+        {video?.kind === "link" && (
+          <a
+            href={video.src}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-flex items-center gap-2 border-b border-[#247f72] pb-1 text-sm font-semibold text-[#185c52] hover:text-[#0f3a34]"
+          >
+            Переглянути відео <ArrowRight size={15} />
+          </a>
+        )}
+        {total > 1 && (
+          <div className="mt-6 flex items-center justify-between gap-3 border-t border-[#725b4a]/30 pt-4">
+            <button
+              type="button"
+              onClick={() => onMove(-1)}
+              aria-label="Попередня робота"
+              className="rounded-full border border-[#806d59] p-2 hover:bg-[#d3bda3]"
+            >
+              <ChevronLeft size={19} />
+            </button>
+            <span className="font-mono text-xs tracking-widest text-[#665041]">
+              {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
+            </span>
+            <button
+              type="button"
+              onClick={() => onMove(1)}
+              aria-label="Наступна робота"
+              className="rounded-full border border-[#806d59] p-2 hover:bg-[#d3bda3]"
+            >
+              <ChevronRight size={19} />
+            </button>
+          </div>
+        )}
+      </div>
     </article>
   );
 }
 
-function Scrap({ note }: { note: PaperNote }) {
-  const { spot } = note;
-
-  return (
-    <div
-      aria-hidden="true"
-
-      className="absolute flex flex-col items-center justify-center overflow-hidden border border-[#b9ab98] bg-[#e2d7c4] px-1 text-center"
-
-      style={{
-        left: spot.x,
-
-        top: spot.y,
-
-        width: spot.w,
-
-        height: spot.h,
-
-        transform: `rotate(${spot.angle}deg)`,
-
-        zIndex: 18,
-
-        boxShadow: "3px 9px 17px rgba(0,0,0,.26)",
-
-        backgroundImage:
-          "linear-gradient(145deg,rgba(255,255,255,.28),transparent 70%,rgba(100,75,48,.08))",
-      }}
-    >
-      {note.kind === "question" ? (
-        <>
-          <span className="font-mono text-[8px] tracking-widest text-[#736454]">ХТО?</span>
-
-          <span className="font-serif text-[38px] leading-none text-[#8c534b] italic sm:text-[54px]">
-            ?
-          </span>
-
-          <span className="font-mono text-[7px] text-[#83705e]">ЗНАЙДИ ЗВʼЯЗОК</span>
-        </>
-      ) : (
-        <>
-          <span className="font-mono text-[8px] tracking-wider text-[#806e5b]">НОТАТКА</span>
-
-          <span className="mt-1 font-serif text-[14px] leading-tight text-[#58483a] italic sm:text-[18px]">
-            Один актор.
-          </span>
-
-          <span className="font-serif text-[11px] text-[#665545] italic">Різні ролі.</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-function boardPoints(layout: BoardLayout) {
-  const points = new Map<string, { x: number; y: number }>();
-
-  layout.cards.forEach((card) => points.set(card.id, pinPoint(card.spot)));
-
-  layout.notes.forEach((note) => points.set(note.id, pinPoint(note.spot)));
-
-  return points;
-}
-
-// Шнур ПОД карточками: тонкий матовый хлопок, спокойный бордовый оттенок.
-
-function BoardThreads({ layout, width }: { layout: BoardLayout; width: number }) {
-  const points = boardPoints(layout);
-
-  return (
-    <svg
-      aria-hidden="true"
-
-      className="pointer-events-none absolute inset-0 z-[1] h-full w-full"
-
-      viewBox={`0 0 ${width} ${layout.height}`}
-
-      preserveAspectRatio="none"
-    >
-      {layout.wires.map(({ from, to }, index) => {
-        const a = points.get(from);
-
-        const b = points.get(to);
-
-        if (!a || !b) return null;
-
-        const dx = b.x - a.x;
-
-        const dy = b.y - a.y;
-
-        // Незначительная дуга вниз, будто нить слегка провисает под своим весом.
-
-        const sag = Math.min(11, 3 + Math.abs(dx) * 0.009);
-
-        const d = `M ${a.x} ${a.y} C ${a.x + dx * 0.28} ${a.y + dy * 0.28 + sag}, ${a.x + dx * 0.72} ${a.y + dy * 0.72 + sag}, ${b.x} ${b.y}`;
-
-        return (
-          <g key={`${from}-${to}-${index}`} fill="none" strokeLinecap="round">
-            <path
-              d={d}
-              stroke="#0a0707"
-              strokeWidth="3"
-              opacity=".30"
-              transform="translate(0.8 1.5)"
-            />
-
-            <path d={d} stroke="#743f3b" strokeWidth="1.8" />
-
-            <path
-              d={d}
-              stroke="#b46a60"
-              strokeWidth=".48"
-              opacity=".55"
-              transform="translate(0 -0.35)"
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-// Кнопки НАД фотографиями, ровно в точках начала нитей.
-
-function BoardPins({
-  layout,
-  width,
-  svgId,
-}: {
-  layout: BoardLayout;
-  width: number;
-  svgId: string;
-}) {
-  const points = boardPoints(layout);
-
-  return (
-    <svg
-      aria-hidden="true"
-
-      className="pointer-events-none absolute inset-0 z-30 h-full w-full"
-
-      viewBox={`0 0 ${width} ${layout.height}`}
-
-      preserveAspectRatio="none"
-    >
-      <defs>
-        <radialGradient id={`${svgId}-pin`} cx="28%" cy="24%" r="85%">
-          <stop offset="0" stopColor="#e0c9aa" />
-
-          <stop offset=".42" stopColor="#a48565" />
-
-          <stop offset="1" stopColor="#554035" />
-        </radialGradient>
-      </defs>
-
-      {Array.from(points, ([id, p]) => (
-        <g key={id}>
-          <ellipse cx={p.x + 1.3} cy={p.y + 2.5} rx="6.2" ry="4.1" fill="#0c0b0a" opacity=".42" />
-
-          <circle
-            cx={p.x}
-            cy={p.y}
-            r="4.9"
-            fill={`url(#${svgId}-pin)`}
-            stroke="#47372e"
-            strokeWidth=".65"
-          />
-
-          <circle cx={p.x - 1.25} cy={p.y - 1.4} r="1" fill="#f0dfc6" opacity=".75" />
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function WatchDialog({
-  item,
-
-  index,
-
-  count,
-
-  onClose,
-
-  onMove,
-
-  closeRef,
-}: {
-  item: Item;
-
-  index: number;
-
-  count: number;
-
-  onClose: () => void;
-
-  onMove: (offset: number) => void;
-
-  closeRef: RefObject<HTMLButtonElement | null>;
-}) {
-  const iframeSrc = item.video ? videoEmbed(item.video) : null;
-
-  return (
-    <div
-      role="dialog"
-
-      aria-modal="true"
-
-      aria-label={item.title}
-
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-[#100c0a]/90 p-3 backdrop-blur-md sm:p-6"
-
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div className="flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-y-auto rounded-lg border border-[#b79f85]/25 bg-[#241c19] shadow-[0_36px_100px_rgba(0,0,0,.65)]">
-        <div className="flex items-center justify-between gap-4 border-b border-[#ead8c2]/15 px-4 py-3 text-[#f3e9dd] sm:px-6 sm:py-4">
-          <div className="min-w-0">
-            <p className="font-mono text-[10px] tracking-[.2em] text-site-accent uppercase">
-              КІНОАРХІВ / ПЕРЕГЛЯД
-            </p>
-
-            <h2 className="mt-1 truncate font-serif text-xl sm:text-3xl">{item.title}</h2>
-          </div>
-
-          <button
-            ref={closeRef}
-
-            type="button"
-
-            onClick={onClose}
-
-            aria-label="Закрити"
-
-            className="shrink-0 rounded-full border border-white/20 p-2.5 transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="relative aspect-video min-h-[180px] bg-black">
-          {item.video ? (
-            iframeSrc ? (
-              <iframe
-                key={String(item.id)}
-
-                src={iframeSrc}
-
-                title={item.title}
-
-                className="absolute inset-0 h-full w-full"
-
-                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-
-                allowFullScreen
-              />
-            ) : (
-              <video
-                key={String(item.id)}
-
-                src={item.video}
-
-                controls
-
-                autoPlay
-
-                playsInline
-
-                className="absolute inset-0 h-full w-full object-contain"
-              />
-            )
-          ) : item.image ? (
-            <Image src={item.image} alt={item.title} fill sizes="95vw" className="object-contain" />
-          ) : (
-            <div className="flex h-full items-center justify-center font-serif text-6xl text-white/30">
-              ?
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4 text-[#e9d9c9] sm:px-6">
-          <p className="max-w-[65ch] text-sm leading-6 text-[#e9d9c9]/85">
-            {item.description || "Матеріал із кіноархіву."}
-          </p>
-
-          {count > 1 && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                aria-label="Попереднє"
-                onClick={() => onMove(-1)}
-                className="rounded-full border border-white/20 p-2 hover:bg-white/10"
-              >
-                <ChevronLeft size={20} />
-              </button>
-
-              <span className="font-mono text-xs tracking-widest text-[#ccb49e]">
-                {String(index + 1).padStart(2, "0")} / {String(count).padStart(2, "0")}
-              </span>
-
-              <button
-                type="button"
-                aria-label="Наступне"
-                onClick={() => onMove(1)}
-                className="rounded-full border border-white/20 p-2 hover:bg-white/10"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function CinemaEvidenceBoard({ section }: { section: Section }) {
-  const [filter, setFilter] = useState("Усі");
-
+  const content = useMemo(() => buildContent(section), [section]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [closed, setClosed] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
-  const { ref: stageRef, width } = useBoardWidth();
+  const initial = content.episodes[0] ?? content.showreels[0] ?? content.businessCards[0] ?? null;
+  const active = closed ? null : (content.all.find((item) => item.id === activeId) ?? initial);
+  const activeIndex = active ? content.all.findIndex((item) => item.id === active.id) : -1;
+  const promoted = [...content.showreels, ...content.businessCards];
+  const episodes = showAll ? content.episodes : content.episodes.slice(0, 12);
 
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  function select(id: string) {
+    setActiveId(id);
+    setClosed(false);
+  }
 
-  const closeRef = useRef<HTMLButtonElement>(null);
-
-  const svgId = useId().replace(/[^a-zA-Z0-9\_-]/g, "");
-
-  const allItems = useMemo(
-    () => section.groups.flatMap((group) => group.items),
-
-    [section.groups],
-  );
-
-  const visibleItems = useMemo(
-    () =>
-      filter === "Усі"
-        ? allItems
-        : section.groups
-
-            .filter((group) => group.title === filter)
-
-            .flatMap((group) => group.items),
-
-    [filter, allItems, section.groups],
-  );
-
-  const layout = useMemo(() => makeLayout(visibleItems, width), [visibleItems, width]);
-
-  const activeIndex = visibleItems.findIndex((item) => String(item.id) === activeId);
-
-  const active = activeIndex >= 0 ? visibleItems[activeIndex] : null;
-
-  const open = useCallback((item: Item, source: HTMLButtonElement) => {
-    triggerRef.current = source;
-
-    setActiveId(String(item.id));
-  }, []);
-
-  const close = useCallback(() => {
-    setActiveId(null);
-
-    requestAnimationFrame(() => triggerRef.current?.focus());
-  }, []);
-
-  const move = useCallback(
-    (offset: number) => {
-      setActiveId((current) => {
-        const index = visibleItems.findIndex((item) => String(item.id) === current);
-
-        if (index < 0 || visibleItems.length === 0) return null;
-
-        return String(
-          visibleItems[(index + offset + visibleItems.length) % visibleItems.length].id,
-        );
-      });
-    },
-
-    [visibleItems],
-  );
-
-  useEffect(() => {
-    if (!active) return;
-
-    const previousOverflow = document.body.style.overflow;
-
-    document.body.style.overflow = "hidden";
-
-    closeRef.current?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-      else if (event.key === "ArrowLeft") move(-1);
-      else if (event.key === "ArrowRight") move(1);
-      else if (event.key === "Tab") {
-        const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
-
-        if (!dialog) return;
-
-        const controls = Array.from(
-          dialog.querySelectorAll<HTMLElement>("button, [href], video[controls], iframe"),
-        ).filter((el) => el.getClientRects().length > 0);
-
-        if (!controls.length) return;
-
-        const first = controls[0];
-
-        const last = controls[controls.length - 1];
-
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-
-          first.focus();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [active, close, move]);
+  function move(offset: number) {
+    if (content.all.length === 0 || activeIndex < 0) return;
+    const next = (activeIndex + offset + content.all.length) % content.all.length;
+    select(content.all[next].id);
+  }
 
   return (
-    <section className="relative mx-auto w-full max-w-[1460px] rounded-[12px] border border-[#5b4638]/35 bg-[radial-gradient(ellipse_at_15%_0%,rgba(126,80,53,0.11),transparent_45%),radial-gradient(ellipse_at_95%_32%,rgba(35,103,89,0.07),transparent_43%),linear-gradient(180deg,#2b211d_0%,#241c19_45%,#211a17_100%)] px-2 py-10 text-site-cream sm:px-6 sm:py-14">
-      {/* Заголовок и фильтры отделены от физической поверхности доски. */}
-
-      <div className="mb-8 flex flex-col gap-6 px-2 sm:mb-10 sm:flex-row sm:items-end sm:justify-between sm:px-4">
+    <section className="mx-auto w-full max-w-[1500px] text-[#ead9c5]">
+      <div className="mb-6 flex flex-col gap-3 border-b border-[#81624a]/30 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-3 flex items-center gap-3">
-            <span className="h-px w-8 bg-site-accent" />
-
-            <p className="font-mono text-[10px] tracking-[.21em] text-site-accent uppercase">
-              ОСОБИСТИЙ КІНОАРХІВ / 001
-            </p>
-          </div>
-
-          <h2 className="font-serif text-[38px] leading-tight text-site-cream sm:text-[55px]">
-            Архів ролей
+          <p className="text-[11px] tracking-[.25em] text-[#35b69b]">КІНО / ОСОБИСТИЙ АРХІВ</p>
+          <h2 className="mt-2 font-serif text-3xl text-[#f0dfcd] sm:text-5xl">
+            Ролі, історії, люди
           </h2>
-
-          <p className="mt-3 max-w-xl text-sm leading-7 text-site-muted">
-            Шоуріл, візитка та фрагменти з фільмів — різні історії одного актора.
-          </p>
         </div>
-
-        <div className="flex flex-wrap gap-2" aria-label="Фільтр кіноархіву">
-          {["Усі", ...Array.from(new Set(section.groups.map((group) => group.title)))].map(
-            (name) => (
-              <button
-                key={name}
-
-                type="button"
-
-                onClick={() => {
-                  setFilter(name);
-
-                  setActiveId(null);
-                }}
-
-                aria-pressed={filter === name}
-
-                className={`rounded-full border px-4 py-2 font-mono text-[10px] tracking-[.1em] uppercase transition-colors focus-visible:outline-2 focus-visible:outline-site-accent ${
-                  filter === name
-                    ? "border-site-accent/70 bg-site-accent/15 text-site-cream"
-                    : "border-site-border/60 bg-site-surface/60 text-site-muted hover:border-site-accent/60 hover:text-site-cream"
-                }`}
-              >
-                {name}
-              </button>
-            ),
-          )}
-        </div>
+        <p className="max-w-xs font-serif text-sm leading-6 text-[#c3a995] italic">
+          Кіно — це люди. А люди — це завжди історії.
+        </p>
       </div>
 
-      {/* Коллаж без доски: фотографии, заметки и нити поверх фона сайта. */}
-      <div className="relative isolate overflow-visible bg-transparent">
-        <div className="relative z-10 flex items-start justify-between gap-3 px-4 pt-5 sm:px-9 sm:pt-8">
-          <div className="-rotate-2 border border-[#c6b9a5] bg-[#e2d8c7] px-4 py-3 text-[#46352d] shadow-[3px_8px_17px_rgba(0,0,0,.25)] sm:px-6 sm:py-4">
-            <p className="font-mono text-[8px] tracking-[.16em] uppercase sm:text-[10px]">
-              СПРАВА № 001 / КІНО
-            </p>
+      {/* На телефоне сначала идёт выбранная работа и её текст, потом карточки.
+          Никаких абсолютных координат для самих карточек. */}
+      <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)] lg:gap-6">
+        <div className="order-2 min-w-0 lg:order-1">
+          <div className="relative isolate overflow-hidden rounded-md border-[6px] border-[#493326] bg-[#2d2019] p-3 shadow-[inset_0_0_45px_rgba(0,0,0,.65),0_18px_45px_rgba(0,0,0,.25)] sm:p-5">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 opacity-45"
+              style={{
+                backgroundImage:
+                  "repeating-linear-gradient(24deg,transparent 0 17px,rgba(0,0,0,.07) 18px 19px),radial-gradient(ellipse at 40% 15%,#60412b44,transparent 60%)",
+              }}
+            />
+            {/* Нити лежат ПОД карточками и поэтому не мешают ни кликам, ни тексту. */}
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-0 h-full w-full"
+              viewBox="0 0 700 850"
+              preserveAspectRatio="none"
+            >
+              <path
+                d="M42 56 L368 110 L650 46 M84 290 L580 360 L130 535 L603 680"
+                fill="none"
+                stroke="#874338"
+                strokeWidth="2"
+                opacity=".65"
+              />
+              <path
+                d="M42 56 L368 110 L650 46 M84 290 L580 360 L130 535 L603 680"
+                fill="none"
+                stroke="#d18775"
+                strokeWidth=".55"
+                opacity=".7"
+              />
+            </svg>
+            <div className="relative z-10">
+              {promoted.length > 0 && (
+                <>
+                  <TornLabel>ШОУРІЛ І ВІЗИТКА</TornLabel>
+                  <div className="grid grid-cols-2 items-start gap-3 sm:gap-5">
+                    {promoted.map((item) => (
+                      <EvidenceCard
+                        key={item.id}
+                        item={item}
+                        prominent
+                        active={active?.id === item.id}
+                        onSelect={select}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
 
-            <p className="mt-1 font-serif text-xl leading-tight sm:text-3xl">Досьє ролей</p>
+              <TornLabel>ЕПІЗОДИ / РОБОТИ</TornLabel>
+              {content.episodes.length > 0 ? (
+                <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-4 lg:grid-cols-3 xl:grid-cols-4">
+                  {episodes.map((item) => (
+                    <EvidenceCard
+                      key={item.id}
+                      item={item}
+                      active={active?.id === item.id}
+                      onSelect={select}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-sm border border-[#856850]/30 px-4 py-6 text-center font-serif text-[#c4aa93]">
+                  Епізодів поки немає.
+                </p>
+              )}
 
-            <p className="mt-1 font-mono text-[8px] tracking-[.08em] text-[#877363] uppercase sm:text-[10px]">
-              Відео · Ролі · Фрагменти
-            </p>
-          </div>
-
-          <span className="mt-3 border-b border-[#b0a398]/40 pb-1 font-mono text-[9px] tracking-[.18em] text-[#c3b5a4] uppercase sm:text-[11px]">
-            {String(visibleItems.length).padStart(2, "0")} матеріалів
-          </span>
-        </div>
-
-        <div
-          ref={stageRef}
-
-          className="relative isolate mt-6 w-full sm:mt-8"
-
-          style={{ height: width ? layout.height : 550, opacity: width ? 1 : 0 }}
-        >
-          {width > 0 && <BoardThreads layout={layout} width={width} />}
-
-          {layout.cards.map((data) => (
-            <EvidencePhoto key={data.id} data={data} onOpen={open} />
-          ))}
-
-          {layout.notes.map((note) => (
-            <Scrap key={note.id} note={note} />
-          ))}
-
-          {width > 0 && <BoardPins layout={layout} width={width} svgId={svgId} />}
-
-          {width > 0 && visibleItems.length === 0 && (
-            <div className="absolute inset-x-5 top-16 -rotate-2 border border-[#c6b8a1] bg-[#e4d8c5] px-6 py-8 text-center font-serif text-lg text-[#59483b] shadow-xl sm:inset-x-1/4">
-              У цій добірці поки немає матеріалів.
+              {content.episodes.length > 12 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll((prev) => !prev)}
+                  className="mx-auto mt-8 flex items-center justify-center gap-3 rounded-sm border border-[#b08b63] bg-[#16463e] px-5 py-3 font-serif text-sm tracking-[.08em] text-[#eedccb] shadow-[2px_7px_12px_rgba(0,0,0,.4)] hover:bg-[#1e6759]"
+                >
+                  <Film size={18} />
+                  {showAll ? "ЗГОРНУТИ АРХІВ" : "ПОВНИЙ АРХІВ КІНО"}
+                  <ArrowRight size={16} />
+                </button>
+              )}
+              {content.all.length === 0 && (
+                <p className="py-8 text-center font-serif text-[#d4bea9]">
+                  Опублікованих робіт поки немає.
+                </p>
+              )}
             </div>
-          )}
+          </div>
+        </div>
+
+        <div className="order-1 min-w-0 lg:order-2">
+          <FeaturedWork
+            item={active}
+            index={Math.max(0, activeIndex)}
+            total={content.all.length}
+            onClose={() => setClosed(true)}
+            onMove={move}
+          />
         </div>
       </div>
-
-      {active && (
-        <WatchDialog
-          item={active}
-
-          index={activeIndex}
-
-          count={visibleItems.length}
-
-          onClose={close}
-
-          onMove={move}
-
-          closeRef={closeRef}
-        />
-      )}
     </section>
   );
 }

@@ -51,7 +51,7 @@ function parseLink(raw: string): string | null {
   return url.href;
 }
 
-const PUBLIC_PATHS: Record<CreativeSlug, string> = {
+const publicPaths: Record<CreativeSlug, string> = {
   cinema: "/kino",
   theatre: "/teatr",
   "my-cinema": "/moie-kino",
@@ -62,7 +62,7 @@ const PUBLIC_PATHS: Record<CreativeSlug, string> = {
 
 function invalidateSection(slug: CreativeSlug) {
   revalidatePath(`/admin/${slug}`);
-  revalidatePath(PUBLIC_PATHS[slug]);
+  revalidatePath(publicPaths[slug]);
   revalidatePath("/home");
 }
 
@@ -113,8 +113,14 @@ export async function saveCreativeItem(formData: FormData): Promise<ActionResult
           select: { id: true, resourceType: true },
         });
         if (!media) throw new Error("Обраний файл відсутній у медіатеці.");
-        if (media.resourceType !== "image")
-          throw new Error("Обраний медіафайл має бути фотографією.");
+        const permitsVideo = slug === "cinema" || slug === "my-cinema";
+        if (media.resourceType !== "image" && !(permitsVideo && media.resourceType === "video")) {
+          throw new Error(
+            permitsVideo
+              ? "У цьому розділі можна обрати лише фото або відео."
+              : "Обраний медіафайл має бути фотографією.",
+          );
+        }
       }
     }
 
