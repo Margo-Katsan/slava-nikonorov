@@ -1,8 +1,17 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import { ArrowRight, ChevronLeft, ChevronRight, Film, Play, X } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  Film,
+  Fingerprint,
+  Play,
+  ScanSearch,
+  X,
+} from "lucide-react";
 import Image from "next/image";
 
 import type { Item, Section } from "@/lib/content";
@@ -103,17 +112,199 @@ function getVideoSource(url?: string): VideoSource {
   }
 }
 
+// Маленькая металлическая кнопка: две отражающие поверхности и короткая ножка.
 function Pin({ teal = false }: { teal?: boolean }) {
   return (
     <span
+      data-board-pin
       aria-hidden="true"
-      className="pointer-events-none absolute -top-[9px] left-1/2 z-20 h-[18px] w-[18px] -translate-x-1/2 rounded-full border border-[#38221a] shadow-[1px_4px_5px_rgba(0,0,0,.65)]"
+      className="pointer-events-none absolute -top-[5px] left-1/2 z-20 flex size-[10px] -translate-x-1/2 items-center justify-center rounded-full border border-[#422a20] shadow-[1px_2px_3px_rgba(0,0,0,.7)]"
       style={{
         background: teal
-          ? "radial-gradient(circle at 30% 25%,#b0ebe0 0%,#2da58e 32%,#145449 75%,#0a342c 100%)"
-          : "radial-gradient(circle at 30% 25%,#f5d4a1 0%,#bb7851 32%,#743922 74%,#391d17 100%)",
+          ? "radial-gradient(circle at 32% 25%,#b7f1df 0%,#42af98 30%,#196153 73%,#0b372f 100%)"
+          : "radial-gradient(circle at 30% 24%,#f7dcaf 0%,#c38a5c 30%,#875034 73%,#3d231b 100%)",
       }}
-    />
+    >
+      <span className="absolute top-[1px] left-[2px] size-[2px] rounded-full bg-white/70" />
+    </span>
+  );
+}
+
+// Наклон детерминирован по ID. Math.random() здесь вызвал бы скачки
+// после ререндеров и несоответствие HTML сервера/клиента.
+function cardTilt(id: string, prominent: boolean): number {
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
+  }
+  const ratio = (hash >>> 0) / 4294967295;
+  return Math.round((ratio - 0.5) * (prominent ? 4.2 : 5.4) * 100) / 100;
+}
+
+type Anchor = { x: number; y: number };
+type ThreadGeometry = { width: number; height: number; pins: Anchor[] };
+
+// SVG измеряет настоящие кнопки карточек, а не рисует нити по
+// заранее зашитым координатам. При смене ширины всё пересчитывается.
+function ThreadLines({ geometry }: { geometry: ThreadGeometry }) {
+  const { width, height, pins } = geometry;
+  const connections: Array<[number, number]> = [];
+  // Несколько осмысленных связей вместо сплошной «паутины».
+  for (let i = 0; i < pins.length - 1 && connections.length < 9; i++) {
+    if (i % 3 !== 2) connections.push([i, i + 1]);
+  }
+  if (pins.length >= 4 && connections.length < 9) connections.push([0, 3]);
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+    >
+      {connections.map(([from, to], i) => {
+        const a = pins[from];
+        const b = pins[to];
+        if (!a || !b) return null;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        // Лёгкое провисание под действием тяжести (два контрольных узла).
+        const sag = Math.min(27, Math.hypot(dx, dy) * 0.065 + 4);
+        const d = `M ${a.x} ${a.y} C ${a.x + dx * 0.3} ${a.y + dy * 0.3 + sag}, ${a.x + dx * 0.7} ${a.y + dy * 0.7 + sag}, ${b.x} ${b.y}`;
+        return (
+          <g key={`${from}-${to}-${i}`} fill="none" strokeLinecap="round">
+            {/* Мягкая тень от шнура на поверхности доски. */}
+            <path
+              d={d}
+              stroke="#080504"
+              strokeWidth="5"
+              opacity=".38"
+              transform="translate(1.3 2.6)"
+            />
+            {/* Темная боковая поверхность объёмного шнура. */}
+            <path d={d} stroke="#542a25" strokeWidth="3.2" opacity=".96" />
+            {/* Основной хлопковый красно-коричневый шнур. */}
+            <path d={d} stroke="#a25d4e" strokeWidth="1.8" opacity=".96" />
+            {/* Узкий светлый блик на верхней грани. */}
+            <path
+              d={d}
+              stroke="#e1a18b"
+              strokeWidth=".55"
+              opacity=".85"
+              transform="translate(-.45 -1)"
+            />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function ConnectedCards({
+  items,
+  prominent = false,
+  activeId,
+  onSelect,
+}: {
+  items: Item[];
+  prominent?: boolean;
+  activeId?: string;
+  onSelect: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [geometry, setGeometry] = useState<ThreadGeometry | null>(null);
+  const signature = items.map((item) => item.id).join("|");
+
+  useEffect(() => {
+    const board = ref.current;
+    if (!board) return;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const bounds = board.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) return;
+        const pins = Array.from(board.querySelectorAll<HTMLElement>("[data-board-pin]"));
+        const points = pins.map((pin) => {
+          const rect = pin.getBoundingClientRect();
+          return {
+            x: rect.left + rect.width / 2 - bounds.left,
+            y: rect.top + rect.height / 2 - bounds.top,
+          };
+        });
+        setGeometry({ width: bounds.width, height: bounds.height, pins: points });
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(board);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [signature]);
+
+  return (
+    <div
+      ref={ref}
+      className={
+        prominent
+          ? "relative grid grid-cols-2 items-start gap-x-5 gap-y-7 px-3 py-4 sm:gap-x-7"
+          : "relative grid grid-cols-2 gap-x-5 gap-y-8 px-3 py-4 sm:grid-cols-3 sm:gap-x-6 lg:grid-cols-3 xl:grid-cols-4"
+      }
+    >
+      {geometry && <ThreadLines geometry={geometry} />}
+      {items.map((item) => (
+        <EvidenceCard
+          key={item.id}
+          item={item}
+          prominent={prominent}
+          active={item.id === activeId}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Дополнительные «улики» живут в обычной сетке, а не плавают над текстом.
+function ClueNotes() {
+  const notes = [
+    { kind: "question", title: "ХТО?", label: "НЕВІДОМА РОЛЬ", rotation: -3 },
+    { kind: "fingerprint", title: "ВІДБИТОК", label: "ДОКАЗ № 07", rotation: 2.4 },
+    { kind: "search", title: "ЗВ'ЯЗОК", label: "СПРАВА ВІДКРИТА", rotation: -1.9 },
+  ] as const;
+
+  return (
+    <div
+      aria-hidden="true"
+      className="mx-auto my-6 grid w-full max-w-[490px] grid-cols-3 gap-3 px-1 sm:gap-5"
+    >
+      {notes.map((note) => (
+        <div
+          key={note.kind}
+          className="relative flex min-h-[78px] min-w-0 flex-col items-center justify-center border border-[#b59b7b] px-1 py-2 text-center shadow-[2px_7px_12px_rgba(0,0,0,.36)] sm:min-h-[94px]"
+          style={{ ...PAPER, transform: `rotate(${note.rotation}deg)` }}
+        >
+          <Pin />
+          {note.kind === "question" ? (
+            <span className="font-serif text-3xl leading-none text-[#7b4b3d] sm:text-4xl">?</span>
+          ) : note.kind === "fingerprint" ? (
+            <Fingerprint className="size-7 text-[#7d5542] opacity-80 sm:size-9" strokeWidth={1.2} />
+          ) : (
+            <ScanSearch className="size-7 text-[#695445] opacity-80 sm:size-9" strokeWidth={1.3} />
+          )}
+          <span className="mt-1 font-serif text-[9px] font-bold tracking-[.03em] text-[#4a3228] sm:text-[11px]">
+            {note.title}
+          </span>
+          <span className="mt-0.5 max-w-full truncate font-mono text-[6px] tracking-[.05em] text-[#94745b] sm:text-[8px]">
+            {note.label}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -144,7 +335,10 @@ function EvidenceCard({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="relative min-w-0 pt-2">
+    <div
+      className="relative z-10 min-w-0 px-[2px] pt-3 pb-2"
+      style={{ transform: `rotate(${cardTilt(item.id, prominent)}deg)` }}
+    >
       <Pin teal={active} />
       <button
         type="button"
@@ -366,7 +560,7 @@ export function CinemaEvidenceBoard({ section }: { section: Section }) {
           Никаких абсолютных координат для самих карточек. */}
       <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)] lg:gap-6">
         <div className="order-2 min-w-0 lg:order-1">
-          <div className="relative isolate overflow-hidden rounded-md border-[6px] border-[#493326] bg-[#2d2019] p-3 shadow-[inset_0_0_45px_rgba(0,0,0,.65),0_18px_45px_rgba(0,0,0,.25)] sm:p-5">
+          <div className="relative isolate overflow-hidden rounded-md border-[6px] border-[#493326] bg-[#2d2019] p-4 shadow-[inset_0_0_45px_rgba(0,0,0,.65),0_18px_45px_rgba(0,0,0,.25)] sm:p-6">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 opacity-45"
@@ -375,58 +569,24 @@ export function CinemaEvidenceBoard({ section }: { section: Section }) {
                   "repeating-linear-gradient(24deg,transparent 0 17px,rgba(0,0,0,.07) 18px 19px),radial-gradient(ellipse at 40% 15%,#60412b44,transparent 60%)",
               }}
             />
-            {/* Нити лежат ПОД карточками и поэтому не мешают ни кликам, ни тексту. */}
-            <svg
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 z-0 h-full w-full"
-              viewBox="0 0 700 850"
-              preserveAspectRatio="none"
-            >
-              <path
-                d="M42 56 L368 110 L650 46 M84 290 L580 360 L130 535 L603 680"
-                fill="none"
-                stroke="#874338"
-                strokeWidth="2"
-                opacity=".65"
-              />
-              <path
-                d="M42 56 L368 110 L650 46 M84 290 L580 360 L130 535 L603 680"
-                fill="none"
-                stroke="#d18775"
-                strokeWidth=".55"
-                opacity=".7"
-              />
-            </svg>
+            {/* SVG-нити теперь привязаны к реальным булавкам внутри ConnectedCards. */}
             <div className="relative z-10">
               {promoted.length > 0 && (
                 <>
                   <TornLabel>ШОУРІЛ І ВІЗИТКА</TornLabel>
-                  <div className="grid grid-cols-2 items-start gap-3 sm:gap-5">
-                    {promoted.map((item) => (
-                      <EvidenceCard
-                        key={item.id}
-                        item={item}
-                        prominent
-                        active={active?.id === item.id}
-                        onSelect={select}
-                      />
-                    ))}
-                  </div>
+                  <ConnectedCards
+                    items={promoted}
+                    prominent
+                    activeId={active?.id}
+                    onSelect={select}
+                  />
                 </>
               )}
 
+              <ClueNotes />
               <TornLabel>ЕПІЗОДИ / РОБОТИ</TornLabel>
               {content.episodes.length > 0 ? (
-                <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-4 lg:grid-cols-3 xl:grid-cols-4">
-                  {episodes.map((item) => (
-                    <EvidenceCard
-                      key={item.id}
-                      item={item}
-                      active={active?.id === item.id}
-                      onSelect={select}
-                    />
-                  ))}
-                </div>
+                <ConnectedCards items={episodes} activeId={active?.id} onSelect={select} />
               ) : (
                 <p className="rounded-sm border border-[#856850]/30 px-4 py-6 text-center font-serif text-[#c4aa93]">
                   Епізодів поки немає.
