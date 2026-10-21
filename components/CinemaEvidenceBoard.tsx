@@ -36,7 +36,8 @@ const PAPER = {
 };
 
 function categoryOf(group: string, item: Item): "showreel" | "business" | "episode" {
-  const text = `${group} ${item.category ?? ""} ${item.title} ${item.id}`.toLocaleLowerCase("uk");
+  // Групу визначає розділ з БД, а не випадкові слова в назві фільму.
+  const text = `${group} ${item.category ?? ""}`.toLocaleLowerCase("uk");
   if (/шоур[іi]л|showreel/.test(text)) return "showreel";
   if (/візитк|визитк|business card|\bintro\b/.test(text)) return "business";
   return "episode";
