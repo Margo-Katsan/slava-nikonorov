@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cloudinaryVideoPoster } from "@/lib/cloudinary-video-poster";
 import { type Item, type Section, type SectionKey, getSection } from "@/lib/content";
 import { PUBLIC_GROUP_LABELS, categoryGroupIndex } from "@/lib/creative/category-groups";
 import { getPublishedCreativeItems } from "@/lib/creative/public";
@@ -31,6 +32,8 @@ export async function getSectionFromDb(slug: string): Promise<Section | undefine
   const unassigned: Item[] = [];
 
   for (const record of records) {
+    const mediaVideoUrl =
+      record.mediaAsset?.resourceType === "video" ? record.mediaAsset.url : undefined;
     const item: Item = {
       id: record.id,
       title: record.title === "Без назви" ? "" : record.title,
@@ -38,8 +41,15 @@ export async function getSectionFromDb(slug: string): Promise<Section | undefine
         key === "ya-pyshu"
           ? plainTextFromStored(record.body)
           : (record.description ?? record.subtitle ?? undefined),
-      image: record.mediaAsset?.resourceType === "image" ? record.mediaAsset.url : undefined,
-      video: record.linkUrl ?? undefined,
+      // Images stay as-is. For a Cloudinary video, show a still on the evidence board.
+      image:
+        record.mediaAsset?.resourceType === "image"
+          ? record.mediaAsset.url
+          : mediaVideoUrl
+            ? cloudinaryVideoPoster(mediaVideoUrl)
+            : undefined,
+      // A selected Cloudinary video is played directly. Otherwise use the external link.
+      video: mediaVideoUrl ?? record.linkUrl ?? undefined,
       category: record.categoryTag ?? undefined,
     };
 

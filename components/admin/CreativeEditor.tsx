@@ -262,12 +262,15 @@ export function CreativeEditor({ slug, editing, media, onClose, onSaved }: Props
             defaultValue={existing?.body}
           />
           <CreativeMediaPicker
-            title="Постер / кадр із медіатеки"
+            title="Фото або відео з медіатеки Cloudinary"
             files={media}
             value={mediaId}
             onChange={setMediaId}
-            imagesOnly
           />
+          <p className="text-xs leading-6 text-[#af998e]">
+            Вибери відео, щоб воно відтворювалося на сторінці «Кіно». Якщо відео не вибрано, можна
+            використати посилання на YouTube або Vimeo вище.
+          </p>
         </div>
       ) : slug === "theatre" ? (
         <div className="space-y-5">
@@ -348,11 +351,10 @@ export function CreativeEditor({ slug, editing, media, onClose, onSaved }: Props
             defaultValue={existing?.body}
           />
           <CreativeMediaPicker
-            title="Постер / кадр"
+            title="Постер або відео з медіатеки Cloudinary"
             files={media}
             value={mediaId}
             onChange={setMediaId}
-            imagesOnly
           />
         </div>
       ) : slug === "painting" ? (

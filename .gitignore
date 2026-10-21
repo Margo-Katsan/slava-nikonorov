@@ -5,6 +5,7 @@ out
 !.env.example
 .env.local
 .env.production.migrate
+.env.production.bootstrap
 *.tsbuildinfo
 
 .vercel

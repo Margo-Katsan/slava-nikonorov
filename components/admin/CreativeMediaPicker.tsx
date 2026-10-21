@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Check, ExternalLink, Film, Images, Search, X } from "lucide-react";
 
+import { cloudinaryVideoPoster } from "@/lib/cloudinary-video-poster";
 import type { CreativeMedia } from "@/lib/creative/sections";
 import { categoryLabel } from "@/lib/media/categories";
 
@@ -20,6 +21,31 @@ function cloudinaryThumb(url: string): string {
   // Media URLs are read from our database; do not change arbitrary third-party URLs.
   if (!url.startsWith("https://res.cloudinary.com/")) return url;
   return url.replace("/image/upload/", "/image/upload/f_auto,q_auto,w_360,c_limit/");
+}
+
+function MediaPreview({ file, className }: { file: CreativeMedia; className: string }) {
+  if (file.resourceType === "image") {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img loading="lazy" src={cloudinaryThumb(file.url)} alt="" className={className} />;
+  }
+
+  const poster = cloudinaryVideoPoster(file.url);
+  return (
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#402c25]">
+      {poster ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img loading="lazy" src={poster} alt="" className={className} />
+      ) : null}
+      <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+        <span className="rounded-full border border-[#efdfcd]/60 bg-[#231915]/80 p-2.5">
+          <Film size={19} className="text-[#efdfcd]" />
+        </span>
+      </span>
+      <span className="absolute right-1 bottom-1 rounded bg-[#1b1412]/90 px-1.5 py-0.5 text-[9px] text-[#efdfcd]">
+        ВІДЕО
+      </span>
+    </div>
+  );
 }
 
 export function CreativeMediaPicker({
@@ -84,18 +110,9 @@ export function CreativeMediaPicker({
       <input type="hidden" name="mediaAssetId" value={value} />
       {selected ? (
         <div className="flex items-center gap-4 rounded-xl border border-white/15 bg-[#1b1412] p-3">
-          {selected.resourceType === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={cloudinaryThumb(selected.url)}
-              alt=""
-              className="h-20 w-24 shrink-0 rounded-lg object-cover"
-            />
-          ) : (
-            <div className="flex h-20 w-24 shrink-0 items-center justify-center rounded-lg bg-[#402c25]">
-              <Film className="text-[#d8a884]" />
-            </div>
-          )}
+          <div className="h-20 w-24 shrink-0 overflow-hidden rounded-lg">
+            <MediaPreview file={selected} className="h-full w-full object-cover" />
+          </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm text-[#efdfcd]">{selected.title}</p>
             <p className="mt-1 text-xs text-[#a99386]">{categoryLabel(selected.category)}</p>
@@ -232,19 +249,10 @@ export function CreativeMediaPicker({
                       className={`group relative overflow-hidden rounded-xl border bg-[#342520] text-left transition hover:border-[#35b69b] ${file.id === value ? "border-[#35b69b] ring-1 ring-[#35b69b]" : "border-white/10"}`}
                     >
                       <div className="relative aspect-[4/3] overflow-hidden bg-black/25">
-                        {file.resourceType === "image" ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            loading="lazy"
-                            src={cloudinaryThumb(file.url)}
-                            alt=""
-                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center">
-                            <Film size={32} className="text-[#d5ab85]" />
-                          </div>
-                        )}
+                        <MediaPreview
+                          file={file}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                        />
                         {file.id === value && (
                           <span className="absolute top-2 right-2 rounded-full bg-[#268a76] p-1.5 text-white">
                             <Check size={14} />
