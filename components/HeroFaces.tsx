@@ -11,224 +11,216 @@ type Face = {
   depth: number;
 };
 
-const faces: Face[] = [
-  // ДАЛЬНИЙ ВЕРХНИЙ ОБРАЗ
+// Все позиции заданы отдельными статическими Tailwind-классами.
+// На десктопе сохраняем композицию, но даём запас на поворот и параллакс:
+// никакая голова не должна опираться на край обрезающего контейнера.
+const desktopFaces: Face[] = [
   {
     src: "/images/hero-faces/face-05.png",
-    position: "left-[63%] top-[1%] z-0 " + "w-[clamp(155px,15vw,210px)] " + "-rotate-[4deg]",
-    appearance: "opacity-[0.4] brightness-[0.62] " + "saturate-[0.65] blur-[0.7px]",
+    position: "left-[62%] top-[6%] z-0 w-[clamp(135px,13vw,175px)] -rotate-[4deg]",
+    appearance: "opacity-40 brightness-[0.62] saturate-[0.65] blur-[0.7px]",
     depth: 3,
   },
-
-  // ЛЕВОЕ КРУПНОЕ ЛИЦО
   {
     src: "/images/hero-faces/face-02.png",
-    position: "left-[46%] top-[19%] z-20 " + "w-[clamp(230px,22vw,305px)] " + "-rotate-[5deg]",
-    appearance: "opacity-[0.9] brightness-[0.84] " + "saturate-[0.82]",
+    position: "left-[46%] top-[20%] z-20 w-[clamp(215px,21vw,290px)] -rotate-[5deg]",
+    appearance: "opacity-90 brightness-[0.84] saturate-[0.82]",
     depth: 9,
   },
-
-  // ПРАВОЕ ВЕРХНЕЕ ЛИЦО
   {
     src: "/images/hero-faces/face-01.png",
-    position: "left-[76%] top-[7%] z-10 " + "w-[clamp(225px,23vw,320px)] " + "rotate-[3deg]",
-    appearance: "opacity-[0.85] brightness-[0.82] " + "saturate-[0.85]",
+    position: "right-[6%] top-[9%] z-10 w-[clamp(215px,20vw,285px)] rotate-[3deg]",
+    appearance: "opacity-85 brightness-[0.82] saturate-[0.85]",
     depth: 7,
   },
-
-  // НИЖНЕЕ ЛЕВОЕ ЛИЦО
   {
     src: "/images/hero-faces/face-04.png",
-    position: "left-[50%] top-[57%] z-10 " + "w-[clamp(185px,18vw,250px)] " + "rotate-[5deg]",
-    appearance: "opacity-[0.72] brightness-[0.73] " + "saturate-[0.75]",
+    position: "left-[49%] top-[53%] z-10 w-[clamp(165px,16.5vw,220px)] rotate-[5deg]",
+    appearance: "opacity-70 brightness-[0.73] saturate-[0.75]",
     depth: 5,
   },
-
-  // НИЖНЕЕ ПРАВОЕ ЛИЦО
   {
     src: "/images/hero-faces/face-06.png",
-    position: "left-[77%] top-[50%] z-10 " + "w-[clamp(195px,20vw,280px)] " + "-rotate-[4deg]",
-    appearance: "opacity-[0.78] brightness-[0.77] " + "saturate-[0.8]",
+    position: "right-[6%] top-[52%] z-10 w-[clamp(175px,17.5vw,230px)] -rotate-[4deg]",
+    appearance: "opacity-75 brightness-[0.77] saturate-[0.8]",
     depth: 6,
+  },
+];
+
+// Мобильная композиция отдельная. Каждая голова находится с небольшим запасом
+// ВНУТРИ области Hero, даже с учётом наклона. Не выносим карточки за края:
+// внешние overflow-hidden нужны, чтобы не появлялась горизонтальная прокрутка.
+const mobileFaces: Omit<Face, "depth">[] = [
+  {
+    src: "/images/hero-faces/face-05.png",
+    position: "left-1/2 top-[8%] z-[1] w-[min(28%,130px)] -translate-x-1/2 -rotate-[6deg]",
+    appearance: "opacity-30 brightness-[0.65] saturate-[0.6] blur-[0.5px]",
+  },
+  {
+    src: "/images/hero-faces/face-02.png",
+    position: "left-[5%] top-[16%] z-[5] w-[min(40%,185px)] -rotate-[7deg]",
+    appearance: "opacity-80 brightness-[0.82] saturate-[0.75]",
+  },
+  {
+    src: "/images/hero-faces/face-01.png",
+    position: "right-[5%] top-[15%] z-[5] w-[min(40%,185px)] rotate-[7deg]",
+    appearance: "opacity-80 brightness-[0.8] saturate-[0.8]",
+  },
+  {
+    src: "/images/hero-faces/face-04.png",
+    position: "bottom-[16%] left-[6%] z-[4] w-[min(34%,160px)] rotate-[7deg]",
+    appearance: "opacity-55 brightness-[0.72] saturate-[0.7]",
+  },
+  {
+    src: "/images/hero-faces/face-06.png",
+    position: "bottom-[17%] right-[6%] z-[4] w-[min(34%,160px)] -rotate-[7deg]",
+    appearance: "opacity-60 brightness-[0.76] saturate-[0.75]",
   },
 ];
 
 export function HeroFaces() {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ПАРАЛЛАКС
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-
-    const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
-
-    if (reducedMotion.matches || !finePointer.matches) {
-      return;
-    }
-
-    const layers = container.querySelectorAll<HTMLElement>("[data-parallax]");
+    const desktopPointer = window.matchMedia(
+      "(min-width: 1024px) and (hover: hover) and (pointer: fine)",
+    );
+    const layers = Array.from(container.querySelectorAll<HTMLElement>("[data-parallax]"));
 
     let frame: number | null = null;
     let mouseX = 0;
     let mouseY = 0;
 
     const update = () => {
-      layers.forEach((layer) => {
-        const depth = Number(layer.dataset.parallax || 0);
-
-        const x = mouseX * depth;
-        const y = mouseY * depth;
-
-        layer.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-      });
-
       frame = null;
-    };
-
-    const scheduleUpdate = () => {
-      if (frame === null) {
-        frame = requestAnimationFrame(update);
+      for (const layer of layers) {
+        const depth = Number(layer.dataset.parallax) || 0;
+        layer.style.transform = `translate3d(${(mouseX * depth).toFixed(2)}px, ${(mouseY * depth).toFixed(2)}px, 0)`;
       }
     };
 
-    const onPointerMove = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse") return;
-
-      mouseX = (event.clientX / window.innerWidth - 0.5) * 2;
-
-      mouseY = (event.clientY / window.innerHeight - 0.5) * 2;
-
-      scheduleUpdate();
+    const scheduleUpdate = () => {
+      if (frame === null) frame = window.requestAnimationFrame(update);
     };
 
     const reset = () => {
+      if (mouseX === 0 && mouseY === 0) return;
       mouseX = 0;
       mouseY = 0;
       scheduleUpdate();
     };
 
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" || reducedMotion.matches || !desktopPointer.matches) {
+        reset();
+        return;
+      }
 
+      // Движение только при наведении на Hero, а не по всему окну браузера.
+      const rect = container.getBoundingClientRect();
+      if (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom ||
+        rect.width === 0 ||
+        rect.height === 0
+      ) {
+        reset();
+        return;
+      }
+
+      mouseX = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
+      mouseY = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
+      scheduleUpdate();
+    };
+
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
     window.addEventListener("blur", reset);
-    document.addEventListener("mouseleave", reset);
+    window.addEventListener("resize", reset, { passive: true });
 
     return () => {
       window.removeEventListener("pointermove", onPointerMove);
-
       window.removeEventListener("blur", reset);
-      document.removeEventListener("mouseleave", reset);
-
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-
-      layers.forEach((layer) => {
-        layer.style.transform = "";
-      });
+      window.removeEventListener("resize", reset);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      for (const layer of layers) layer.style.transform = "";
     };
   }, []);
 
+  // Переполнение обрезаем лишь как страховку от горизонтального скролла.
+  // Ниже все изображения находятся с запасом внутри границ коллажа.
   return (
-    <div ref={containerRef} className="pointer-events-none absolute inset-0 z-10">
-      {/* АНИМАЦИЯ ГЛАВНОГО ПОРТРЕТА */}
+    <div
+      ref={containerRef}
+      aria-label="Колаж творчих образів Слави Ніконорова"
+      role="img"
+      className="pointer-events-none absolute inset-0 z-10 overflow-hidden"
+    >
+      <style>{`
+        @keyframes heroPortraitFloat {
+          0%, 100% { transform: translate3d(0, 0, 0); }
+          50% { transform: translate3d(0, -5px, 0); }
+        }
 
-      <style>
-        {`
-          @keyframes portraitFloat {
-            0%, 100% {
-              transform: translate3d(0, 0, 0);
-            }
-
-            50% {
-              transform: translate3d(0, -7px, 0);
-            }
+        @media (prefers-reduced-motion: no-preference) {
+          .hero-portrait-floating {
+            animation: heroPortraitFloat 9s ease-in-out infinite;
           }
+        }
 
-          @media (prefers-reduced-motion: no-preference) {
-            .portrait-floating {
-              animation:
-                portraitFloat 9s ease-in-out infinite;
-            }
-          }
+        @media (prefers-reduced-motion: reduce) {
+          .hero-portrait-floating { animation: none !important; }
+          .hero-face-parallax { transition: none !important; }
+        }
+      `}</style>
 
-          @media (prefers-reduced-motion: reduce) {
-            .face-parallax {
-              transition: none !important;
-            }
-
-            .portrait-floating {
-              animation: none !important;
-            }
-          }
-        `}
-      </style>
-
-      {/* МЯГКОЕ СВЕЧЕНИЕ ЗА КОМПОЗИЦИЕЙ */}
-
+      {/* Подсветка, соединяющая отдельные головы в одну композицию. */}
       <div
         aria-hidden="true"
-        className="absolute top-[7%] left-[14%] h-[85%] w-[80%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(155,85,48,0.17)_0%,transparent_72%)] blur-3xl lg:top-[7%] lg:left-[43%] lg:h-[82%] lg:w-[55%]"
+        className="absolute inset-x-[-5%] top-[5%] h-[90%] rounded-full bg-[radial-gradient(ellipse_at_50%_50%,rgba(155,85,48,0.19)_0%,transparent_67%)] blur-3xl lg:inset-x-auto lg:top-[8%] lg:left-[39%] lg:h-[84%] lg:w-[60%]"
       />
 
-      {/* МОБИЛЬНАЯ КОМПОЗИЦИЯ */}
+      {/* МОБИЛЬНАЯ И ПЛАНШЕТНАЯ ВЕРСИЯ: масштаб от размеров Hero. */}
+      <div aria-hidden="true" className="absolute inset-0 lg:hidden">
+        {mobileFaces.map((face) => (
+          <div key={face.src} className={`absolute origin-center ${face.position}`}>
+            <Image
+              src={face.src}
+              alt=""
+              width={350}
+              height={420}
+              sizes="(max-width: 639px) 45vw, (max-width: 1023px) 210px, 0px"
+              className={`block h-auto w-full object-contain drop-shadow-[0_15px_28px_rgba(0,0,0,0.48)] select-none ${face.appearance}`}
+            />
+          </div>
+        ))}
 
-      <div aria-hidden="true" className="absolute inset-0 overflow-hidden lg:hidden">
-        {/* ЛЕВОЕ ЛИЦО */}
-
-        <div className="absolute top-[18%] left-[2%] w-[min(49vw,215px)] -rotate-[7deg] opacity-[0.70] sm:left-[13%]">
-          <Image
-            src="/images/hero-faces/face-02.png"
-            alt=""
-            width={350}
-            height={420}
-            sizes="(max-width: 640px) 47vw, 205px"
-            className="block h-auto w-full object-contain brightness-[0.76] drop-shadow-[0_18px_30px_rgba(0,0,0,0.4)] saturate-[0.76]"
-          />
-        </div>
-
-        {/* ПРАВОЕ ЛИЦО */}
-
-        <div className="absolute top-[13%] right-[2%] w-[min(50vw,220px)] rotate-[6deg] opacity-[0.75] sm:right-[13%]">
-          <Image
-            src="/images/hero-faces/face-01.png"
-            alt=""
-            width={350}
-            height={420}
-            sizes="(max-width: 640px) 48vw, 210px"
-            className="block h-auto w-full object-contain brightness-[0.79] drop-shadow-[0_18px_30px_rgba(0,0,0,0.4)] saturate-[0.8]"
-          />
-        </div>
+        {/* Небольшое затемнение у основания: переход к следующему блоку Hero. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 z-[35] h-[14%] bg-gradient-to-t from-site-bg/30 via-site-bg/5 to-transparent"
+        />
       </div>
 
-      {/* ВСЕ ВТОРОСТЕПЕННЫЕ ЛИЦА — DESKTOP */}
-
+      {/* DESKTOP: второстепенные образы слегка растворяются в фоне слева и справа. */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 hidden overflow-hidden lg:block"
+        className="absolute inset-0 hidden lg:block"
         style={{
-          maskImage:
-            "linear-gradient(to right, " +
-            "transparent 33%, " +
-            "black 43%, " +
-            "black 96%, " +
-            "transparent 100%)",
-
-          WebkitMaskImage:
-            "linear-gradient(to right, " +
-            "transparent 33%, " +
-            "black 43%, " +
-            "black 96%, " +
-            "transparent 100%)",
+          maskImage: "linear-gradient(to right, transparent 31%, black 42%, black 100%)",
+          WebkitMaskImage: "linear-gradient(to right, transparent 31%, black 42%, black 100%)",
         }}
       >
-        {faces.map((face) => (
-          <div key={face.src} className={["absolute origin-center", face.position].join(" ")}>
+        {desktopFaces.map((face) => (
+          <div key={face.src} className={`absolute origin-center ${face.position}`}>
             <div
               data-parallax={face.depth}
-              className="face-parallax transition-transform duration-500 ease-out will-change-transform"
+              className="hero-face-parallax transition-transform duration-500 ease-out will-change-transform"
             >
               <Image
                 src={face.src}
@@ -236,43 +228,28 @@ export function HeroFaces() {
                 width={420}
                 height={500}
                 sizes="(min-width: 1024px) 330px, 0px"
-                className={[
-                  "block h-auto w-full",
-                  "object-contain select-none",
-                  "drop-shadow-[0_22px_40px_rgba(0,0,0,0.45)]",
-                  face.appearance,
-                ].join(" ")}
+                className={`block h-auto w-full object-contain drop-shadow-[0_22px_40px_rgba(0,0,0,0.45)] select-none ${face.appearance}`}
               />
             </div>
           </div>
         ))}
       </div>
 
-      {/* ГЛАВНЫЙ ПОРТРЕТ */}
-
-      <div className="absolute bottom-[8%] left-1/2 z-30 w-[min(88vw,380px)] -translate-x-1/2 sm:bottom-[6%] sm:w-[min(68vw,420px)] lg:top-[12%] lg:bottom-auto lg:left-[54%] lg:w-[clamp(395px,37vw,500px)] lg:translate-x-0 xl:top-[11%] xl:left-[53%]">
-        {/* ПАРАЛЛАКС */}
-
+      {/* ГЛАВНЫЙ ПОРТРЕТ: крупный, но оставляет боковые головы видимыми. */}
+      <div className="absolute bottom-[9%] left-1/2 z-30 w-[min(74%,345px)] -translate-x-1/2 sm:bottom-[6%] sm:w-[min(68%,385px)] lg:top-[12%] lg:bottom-auto lg:left-[54%] lg:w-[clamp(395px,37vw,500px)] lg:translate-x-0 xl:top-[11%] xl:left-[53%]">
         <div
           data-parallax={5}
-          className="face-parallax transition-transform duration-500 ease-out will-change-transform"
+          className="hero-face-parallax transition-transform duration-500 ease-out lg:will-change-transform"
         >
-          {/* МЯГКОЕ ДВИЖЕНИЕ */}
-
-          <div className="portrait-floating">
+          <div className="hero-portrait-floating">
             <Image
               src="/images/portrait.png"
-              alt="Слава Ніконоров"
+              alt=""
               width={700}
               height={760}
               priority
-              sizes="
-                (max-width: 640px) 90vw,
-                (max-width: 1023px) 440px,
-                (max-width: 1350px) 37vw,
-                500px
-              "
-              className="block h-auto w-full rotate-[1deg] object-contain drop-shadow-[0_32px_52px_rgba(0,0,0,0.48)] select-none"
+              sizes="(max-width: 639px) 74vw, (max-width: 1023px) 385px, (max-width: 1350px) 37vw, 500px"
+              className="block h-auto w-full rotate-[1deg] object-contain drop-shadow-[0_30px_48px_rgba(0,0,0,0.55)] select-none"
             />
           </div>
         </div>
