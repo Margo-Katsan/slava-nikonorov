@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import Link from "next/link";
 
-import { DEFAULT_INTRO, INTRO_HEAD_FALLBACK, type IntroPublicConfig } from "@/lib/intro/types";
+import { INTRO_HEAD_FALLBACK } from "@/lib/intro/types";
 
 /**
  * A self-contained rebuild of the introductory merging game.
@@ -709,37 +709,5 @@ export function HeadsGame({
         </div>
       </div>
     </div>
-  );
-}
-
-export default function SlavaHeadsIntro({ intro = DEFAULT_INTRO }: { intro?: IntroPublicConfig }) {
-  const headImages = useMemo(() => intro.heads.map((head) => head.url), [intro.heads]);
-  return (
-    <main className="min-h-dvh bg-[radial-gradient(ellipse_at_50%_38%,#493027_0%,#241813_55%,#1a1210_100%)] px-5 py-10 text-[#eed9cb] sm:px-8">
-      <div className="mx-auto flex max-w-[1120px] flex-col items-center gap-8 lg:grid lg:min-h-[calc(100dvh-5rem)] lg:grid-cols-[minmax(0,1fr)_460px] lg:items-center lg:gap-16">
-        <div className="max-w-[520px] text-center lg:text-left">
-          <p className="mb-5 text-xs tracking-[0.25em] text-[#e4bda8] uppercase">{intro.eyebrow}</p>
-          <h1 className="font-serif text-[clamp(3.1rem,6vw,6.2rem)] leading-[0.98] tracking-[-0.05em]">
-            {intro.heading} <span className="text-[#2da48e] italic">{intro.accent}</span>
-          </h1>
-          <p className="mt-7 max-w-[440px] text-base leading-7 whitespace-pre-wrap text-[#d4b5a4]">
-            {intro.description}
-          </p>
-          <p className="mt-5 font-serif text-lg text-[#eccbb3] italic">{intro.tagline}</p>
-          <Link
-            href={intro.siteHref}
-            className="mt-8 inline-flex items-center gap-3 rounded-full border border-[#b38b76] px-6 py-3 text-sm hover:border-[#2da48e] hover:text-[#55bba7]"
-          >
-            {intro.skipLabel} <span aria-hidden="true">↗</span>
-          </Link>
-        </div>
-        <HeadsGame
-          headImages={headImages}
-          siteHref={intro.siteHref}
-          autoStart={intro.autoModeDefault}
-          dropIntervalMs={intro.autoIntervalMs}
-        />
-      </div>
-    </main>
   );
 }
