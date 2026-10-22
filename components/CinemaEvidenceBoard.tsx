@@ -30,10 +30,11 @@ type BoardContent = {
   episodes: Item[];
 };
 
+// Матовая архивная бумага: не чисто белая, с почти незаметной фактурой.
 const PAPER = {
-  backgroundColor: "#e5d4bd",
+  backgroundColor: "#e8dac4",
   backgroundImage:
-    "repeating-linear-gradient(12deg,rgba(81,51,32,.025) 0px,rgba(81,51,32,.025) 1px,transparent 1px,transparent 5px),linear-gradient(145deg,rgba(255,255,255,.26),transparent 65%)",
+    "linear-gradient(143deg,rgba(255,250,239,.36) 0%,transparent 53%,rgba(94,57,38,.06) 100%),repeating-linear-gradient(12deg,rgba(84,55,39,.016) 0px,rgba(84,55,39,.016) 1px,transparent 1px,transparent 6px)",
 };
 
 function categoryOf(group: string, item: Item): "showreel" | "business" | "episode" {
@@ -132,11 +133,11 @@ function Pin({
       data-board-pin
       data-pin-kind={kind}
       aria-hidden="true"
-      className={`pointer-events-none absolute top-[6px] z-30 flex size-[9px] items-center justify-center rounded-full border border-[#422a20] shadow-[1px_2px_3px_rgba(0,0,0,.75)] ${position}`}
+      className={`pointer-events-none absolute top-[6px] z-30 flex size-[9px] items-center justify-center rounded-full border border-[#3e2a23] shadow-[0_1px_1px_rgba(255,241,222,.18),1px_2px_3px_rgba(0,0,0,.62)] ${position}`}
       style={{
         background: teal
           ? "radial-gradient(circle at 30% 22%,#d2f5e9 0%,#43b6a0 28%,#1a5d51 71%,#0b372f 100%)"
-          : "radial-gradient(circle at 30% 22%,#f9dfb6 0%,#c59063 28%,#825037 73%,#3d231b 100%)",
+          : "radial-gradient(circle at 31% 23%,#f5dbb4 0%,#b98658 27%,#775039 71%,#302019 100%)",
       }}
     >
       <span className="absolute top-[1px] left-[1px] size-[2px] rounded-full bg-white/65" />
@@ -158,12 +159,15 @@ function cardTilt(id: string, prominent: boolean): number {
 type Anchor = { x: number; y: number; kind: "card" | "clue" };
 type ThreadGeometry = { width: number; height: number; pins: Anchor[] };
 
-// Более плотная сеть: соседние карточки + диагональные связи + нити от улик.
-// Все соединения детерминированы и используют реальные координаты кнопок.
+// Сеть нитей аккуратная: только главная цепочка, несколько близких связей
+// и отдельные акценты от мини-улик. Так доска выглядит цельно, но не перегружено.
 function makeThreadConnections(pins: Anchor[], width: number): Array<[number, number]> {
   const connections: Array<[number, number]> = [];
   const seen = new Set<string>();
-  const maxCount = Math.min(56, Math.ceil(pins.length * 2.4));
+  const maxCount = Math.min(
+    width < 640 ? 16 : 22,
+    Math.max(pins.length - 1, Math.ceil(pins.length * 1.15)),
+  );
 
   const add = (a: number, b: number) => {
     if (a === b || a < 0 || b < 0 || a >= pins.length || b >= pins.length) return;
@@ -173,11 +177,13 @@ function makeThreadConnections(pins: Anchor[], width: number): Array<[number, nu
     connections.push([a, b]);
   };
 
-  // Непрерывная линия через группы: шоурил → улики → эпизоды.
+  // Главная последовательность — визуальный "маршрут" по доске.
   for (let i = 1; i < pins.length; i++) add(i - 1, i);
 
-  // Дополнительные диагонали, но без огромного количества одинаковых нитей.
+  // Несколько локальных связей между реально близкими точками.
   for (let i = 0; i < pins.length; i++) {
+    if (connections.length >= maxCount) break;
+
     const nearby = pins
       .map((point, index) => ({
         index,
@@ -186,40 +192,32 @@ function makeThreadConnections(pins: Anchor[], width: number): Array<[number, nu
       .filter(({ index }) => index !== i)
       .sort((a, b) => a.distance - b.distance);
 
-    const count = width < 520 ? 2 : 3;
+    const preferredLinks = pins[i].kind === "clue" ? 1 : width < 640 ? 1 : 2;
+    const maxDistance = width < 640 ? 210 : 255;
     let added = 0;
+
     for (const neighbor of nearby) {
-      if (added >= count || connections.length >= maxCount) break;
-      // Не протягиваем случайные нити через половину длинной доски.
-      if (neighbor.distance > Math.max(320, width * 0.9)) break;
+      if (added >= preferredLinks || connections.length >= maxCount) break;
+      if (neighbor.distance > maxDistance) break;
       const previous = connections.length;
       add(i, neighbor.index);
       if (connections.length > previous) added++;
     }
   }
 
-  // К каждой мини-улике подводим нити от ближайших фотографий сверху и снизу.
+  // Для улик добавляем по одной осмысленной связи к ближайшей карточке.
   pins.forEach((pin, index) => {
-    if (pin.kind !== "clue") return;
-    const cards = pins
+    if (pin.kind !== "clue" || connections.length >= maxCount) return;
+    const nearestCard = pins
       .map((candidate, cardIndex) => ({ candidate, cardIndex }))
-      .filter(({ candidate }) => candidate.kind === "card");
-    const above = cards
-      .filter(({ candidate }) => candidate.y < pin.y)
+      .filter(({ candidate }) => candidate.kind === "card")
       .sort(
         (a, b) =>
           Math.hypot(a.candidate.x - pin.x, a.candidate.y - pin.y) -
           Math.hypot(b.candidate.x - pin.x, b.candidate.y - pin.y),
       )[0];
-    const below = cards
-      .filter(({ candidate }) => candidate.y > pin.y)
-      .sort(
-        (a, b) =>
-          Math.hypot(a.candidate.x - pin.x, a.candidate.y - pin.y) -
-          Math.hypot(b.candidate.x - pin.x, b.candidate.y - pin.y),
-      )[0];
-    if (above) add(index, above.cardIndex);
-    if (below) add(index, below.cardIndex);
+
+    if (nearestCard) add(index, nearestCard.cardIndex);
   });
 
   return connections;
@@ -242,28 +240,28 @@ function ThreadLines({ geometry }: { geometry: ThreadGeometry }) {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const distance = Math.hypot(dx, dy);
-        const sag = Math.min(24, 3 + distance * 0.035 + (i % 4) * 1.4);
+        const sag = Math.min(18, 2.5 + distance * 0.02 + (i % 3) * 1.15);
         const d = `M ${a.x} ${a.y} C ${a.x + dx * 0.28} ${a.y + dy * 0.28 + sag}, ${a.x + dx * 0.73} ${a.y + dy * 0.73 + sag}, ${b.x} ${b.y}`;
-        const warm = i % 5 === 0;
+        const accent = i % 4 === 0;
 
         return (
           <g key={`${from}-${to}`} fill="none" strokeLinecap="round" strokeLinejoin="round">
             {/* Нити проложены ПОД карточками. Тень создает расстояние до доски. */}
             <path
               d={d}
-              stroke="#080504"
-              strokeWidth="5"
-              opacity=".42"
-              transform="translate(1.2 2.2)"
+              stroke="#120909"
+              strokeWidth="4.25"
+              opacity=".24"
+              transform="translate(1 1.8)"
             />
-            <path d={d} stroke={warm ? "#633a29" : "#542a25"} strokeWidth="3.1" opacity=".98" />
-            <path d={d} stroke={warm ? "#ba7652" : "#a45449"} strokeWidth="1.65" opacity=".96" />
+            <path d={d} stroke={accent ? "#5a1f28" : "#4b1821"} strokeWidth="2.45" opacity=".98" />
+            <path d={d} stroke={accent ? "#8f3545" : "#742b38"} strokeWidth="1.2" opacity=".95" />
             <path
               d={d}
-              stroke={warm ? "#e9b28b" : "#d99084"}
-              strokeWidth=".48"
-              opacity=".75"
-              transform="translate(-.45 -.7)"
+              stroke={accent ? "#bf6878" : "#a94d60"}
+              strokeWidth=".36"
+              opacity=".52"
+              transform="translate(-.35 -.45)"
             />
           </g>
         );
@@ -368,7 +366,7 @@ function ClueNotes() {
       {notes.map((note) => (
         <div
           key={note.kind}
-          className="relative flex min-h-[78px] min-w-0 flex-col items-center justify-center border border-[#b59b7b] px-1 py-2 text-center shadow-[2px_7px_12px_rgba(0,0,0,.36)] sm:min-h-[94px]"
+          className="relative flex min-h-[78px] min-w-0 flex-col items-center justify-center border border-[#bba286] px-1 py-2 text-center shadow-[0_5px_0_rgba(30,16,10,.14),0_13px_21px_rgba(0,0,0,.24)] sm:min-h-[94px]"
           style={{ ...PAPER, transform: `rotate(${note.rotation}deg)` }}
         >
           {note.kind === "question" ? (
@@ -394,7 +392,7 @@ function ClueNotes() {
 function TornLabel({ children }: { children: ReactNode }) {
   return (
     <div
-      className="relative mx-auto my-7 w-fit max-w-full px-5 py-2 text-center font-serif text-sm font-semibold tracking-[.12em] text-[#34251d] shadow-[2px_5px_10px_rgba(0,0,0,.35)] sm:text-base"
+      className="relative mx-auto my-7 w-fit max-w-full border border-[#c4ac91]/65 px-5 py-2.5 text-center font-serif text-[13px] font-semibold tracking-[.14em] text-[#38291f] shadow-[0_8px_18px_rgba(0,0,0,.25)] sm:text-[15px]"
       style={{ ...PAPER, clipPath: "polygon(1% 5%,97% 0%,100% 90%,3% 100%,0% 80%)" }}
     >
       {children}
@@ -424,13 +422,15 @@ function EvidenceCard({
         onClick={(event) => onSelect(item.id, event.currentTarget)}
         aria-pressed={active}
         aria-label={`Переглянути: ${item.title}`}
-        className={`group relative block w-full min-w-0 border p-[5px] text-left shadow-[3px_9px_16px_rgba(0,0,0,.45)] transition-transform duration-200 hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#35b69b] sm:p-2 ${
-          active ? "border-[#35b69b] ring-2 ring-[#35b69b]/55" : "border-[#b49c84]"
+        className={`group relative block w-full min-w-0 border p-[5px] text-left shadow-[0_3px_0_rgba(30,19,13,.14),0_14px_25px_rgba(0,0,0,.32)] transition-[transform,box-shadow,border-color] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_5px_0_rgba(30,19,13,.12),0_19px_28px_rgba(0,0,0,.36)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#35b69b] sm:p-2 ${
+          active
+            ? "border-[#4c9f8b] ring-1 ring-[#4c9f8b]/75"
+            : "border-[#b49b7e] hover:border-[#d2b18a]"
         }`}
         style={PAPER}
       >
         <div
-          className={`relative w-full overflow-hidden bg-[#211915] ${prominent ? "aspect-[16/10]" : "aspect-[4/3]"}`}
+          className={`relative w-full overflow-hidden border border-[#513b2e]/30 bg-[#211915] ${prominent ? "aspect-[16/10]" : "aspect-[4/3]"}`}
         >
           {item.image ? (
             <Image
@@ -447,17 +447,21 @@ function EvidenceCard({
               КІНО
             </div>
           )}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 shadow-[inset_0_0_0_1px_rgba(249,226,193,.1),inset_0_-17px_24px_rgba(0,0,0,.16)]"
+          />
           {item.video && (
             <span className="absolute inset-0 flex items-center justify-center">
-              <span className="flex size-10 items-center justify-center rounded-full border border-[#f2dfc9] bg-[#1b1310]/70 text-[#f2dfc9] shadow-lg sm:size-12">
+              <span className="flex size-10 items-center justify-center rounded-full border border-[#e9d5be]/60 bg-[#1b1310]/75 text-[#f2dfc9] shadow-[0_4px_15px_rgba(0,0,0,.32)] backdrop-blur-[2px] sm:size-12">
                 <Play size={20} className="ml-0.5" fill="currentColor" />
               </span>
             </span>
           )}
         </div>
-        <div className="min-w-0 px-1 pt-2 pb-1 sm:px-2">
+        <div className="min-w-0 px-1 pt-2.5 pb-1 sm:px-2">
           <p
-            className={`line-clamp-2 font-serif leading-tight font-semibold break-words text-[#32231b] ${prominent ? "text-base sm:text-lg" : "text-sm sm:text-base"}`}
+            className={`line-clamp-2 font-serif leading-[1.18] font-semibold tracking-[-.015em] break-words text-[#32231b] ${prominent ? "text-base sm:text-lg" : "text-sm sm:text-base"}`}
           >
             {item.title}
           </p>
@@ -497,10 +501,12 @@ function FeaturedWork({
   }
 
   return (
-    <article className="min-w-0 border border-[#8d6b51]/65 bg-[#1c1512] p-2 shadow-[0_18px_40px_rgba(0,0,0,.4)] sm:p-3">
+    <article className="min-w-0 rounded-[10px] border border-[#8d7059]/55 bg-[linear-gradient(145deg,#281d18_0%,#1c1512_64%,#181210_100%)] p-2 shadow-[inset_0_1px_0_rgba(241,213,177,.08),0_22px_55px_rgba(0,0,0,.33)] sm:p-3">
       <div className="flex items-start justify-between gap-3 px-2 pt-2 pb-3 sm:px-3">
         <div className="min-w-0">
-          <p className="text-[10px] tracking-[.23em] text-[#35b69b]">АРХІВ / ОБРАНА РОБОТА</p>
+          <p className="text-[10px] font-medium tracking-[.24em] text-[#63b3a1]">
+            АРХІВ / ОБРАНА РОБОТА
+          </p>
           <h3 className="mt-2 font-serif text-2xl leading-tight break-words text-[#f0dfcd] sm:text-3xl">
             {item.title}
           </h3>
@@ -516,7 +522,7 @@ function FeaturedWork({
         </button>
       </div>
 
-      <div className="relative aspect-video w-full overflow-hidden bg-[#120e0c]">
+      <div className="relative aspect-video w-full overflow-hidden rounded-[3px] border border-[#ad8a68]/18 bg-[#120e0c]">
         {video?.kind === "iframe" ? (
           <iframe
             key={item.id}
@@ -888,14 +894,16 @@ export function CinemaEvidenceBoard({ section }: { section: Section }) {
 
   return (
     <section className="mx-auto w-full max-w-[1500px] text-[#ead9c5]">
-      <div className="mb-6 flex flex-col gap-3 border-b border-[#81624a]/30 pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mb-8 flex flex-col gap-5 border-b border-[#a07d62]/25 pb-7 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[11px] tracking-[.25em] text-[#35b69b]">КІНО / ОСОБИСТИЙ АРХІВ</p>
-          <h2 className="mt-2 font-serif text-3xl text-[#f0dfcd] sm:text-5xl">
+          <p className="flex items-center gap-3 text-[10px] font-semibold tracking-[.24em] text-[#5db19e] uppercase before:h-px before:w-7 before:bg-[#5db19e]/75 before:content-['']">
+            КІНО / ОСОБИСТИЙ АРХІВ
+          </p>
+          <h2 className="mt-3 font-serif text-3xl tracking-[-.03em] text-[#f3e6d7] sm:text-5xl">
             Ролі, історії, люди
           </h2>
         </div>
-        <p className="max-w-xs font-serif text-sm leading-6 text-[#c3a995] italic">
+        <p className="max-w-sm font-serif text-sm leading-6 text-[#c7ae9b] italic sm:text-right">
           Кіно — це люди. А люди — це завжди історії.
         </p>
       </div>
@@ -904,14 +912,18 @@ export function CinemaEvidenceBoard({ section }: { section: Section }) {
           На desktop — прежняя панель справа. */}
       <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.9fr)] lg:gap-6">
         <div className="min-w-0 lg:order-1">
-          <div className="relative isolate overflow-hidden rounded-md border-[6px] border-[#493326] bg-[#2d2019] p-4 shadow-[inset_0_0_45px_rgba(0,0,0,.65),0_18px_45px_rgba(0,0,0,.25)] sm:p-6">
+          <div className="relative isolate overflow-hidden rounded-[14px] border-[6px] border-[#482d24] bg-[#2c201b] p-4 shadow-[inset_0_0_0_1px_rgba(196,150,101,.22),inset_0_0_65px_rgba(0,0,0,.5),0_22px_55px_rgba(0,0,0,.3)] sm:p-6">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 opacity-45"
+              className="pointer-events-none absolute inset-0 opacity-55"
               style={{
                 backgroundImage:
-                  "repeating-linear-gradient(24deg,transparent 0 17px,rgba(0,0,0,.07) 18px 19px),radial-gradient(ellipse at 40% 15%,#60412b44,transparent 60%)",
+                  "repeating-linear-gradient(22deg,transparent 0 17px,rgba(9,5,4,.046) 18px 19px),radial-gradient(ellipse at 32% 14%,rgba(111,52,46,.19),transparent 58%),radial-gradient(ellipse at 72% 78%,rgba(106,73,48,.14),transparent 55%)",
               }}
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-[5px] rounded-[5px] border border-[#ad8562]/16"
             />
             {/* Нити связывают шоурил, улики и эпизоды; все карточки выше SVG. */}
             <BoardThreadNetwork
@@ -943,7 +955,7 @@ export function CinemaEvidenceBoard({ section }: { section: Section }) {
                 <button
                   type="button"
                   onClick={() => setShowAll((prev) => !prev)}
-                  className="mx-auto mt-8 flex items-center justify-center gap-3 rounded-sm border border-[#b08b63] bg-[#16463e] px-5 py-3 font-serif text-sm tracking-[.08em] text-[#eedccb] shadow-[2px_7px_12px_rgba(0,0,0,.4)] hover:bg-[#1e6759]"
+                  className="mx-auto mt-8 flex items-center justify-center gap-3 rounded-md border border-[#6b9d8e]/60 bg-[#16483e] px-5 py-3 font-serif text-sm tracking-[.09em] text-[#f1e3d0] shadow-[0_9px_22px_rgba(0,0,0,.28)] transition-colors hover:border-[#88c3b0] hover:bg-[#1e6053] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#35b69b]"
                 >
                   <Film size={18} />
                   {showAll ? "ЗГОРНУТИ АРХІВ" : "ПОВНИЙ АРХІВ КІНО"}
