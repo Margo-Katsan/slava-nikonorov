@@ -44,7 +44,7 @@ export function Header() {
     <header className="sticky top-0 z-[80] mx-auto w-full max-w-[1360px] border-x border-b border-[#805a42]/35 bg-[#241a15]/95 text-[#f0dfcd] shadow-[0_10px_26px_rgba(0,0,0,.22)] backdrop-blur-xl">
       {/* Эта ширина совпадает с Hero: контейнер строго ограничен 1360px.
           Не добавляйте сюда .wrap или w-screen: это снова растянет шапку. */}
-      <div className="w-full min-w-0 px-4 sm:px-6 lg:px-7">
+      <div className="relative w-full min-w-0 px-4 sm:px-6 lg:px-7">
         <div className="flex h-[70px] min-w-0 items-center gap-4 sm:h-[76px]">
           <Link
             href={HOME_HREF}
@@ -133,7 +133,7 @@ export function Header() {
           <nav
             id="site-mobile-navigation"
             aria-label="Мобільна навігація"
-            className="border-t border-[#765848]/40 pt-3 pb-4 xl:hidden"
+            className="absolute inset-x-0 top-full z-50 max-h-[calc(100dvh-76px)] overflow-y-auto overscroll-contain border-x border-b border-[#805a42]/50 bg-[#241a15] px-4 pt-4 pb-5 shadow-[0_24px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl sm:px-6 lg:px-7 xl:hidden"
           >
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {navigation.map((section) => {
