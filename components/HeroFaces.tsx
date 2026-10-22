@@ -1,259 +1,223 @@
-"use client";
-
-import { useEffect, useRef } from "react";
-
 import Image from "next/image";
 
-type Face = {
+/**
+ * One compositional stage for all heads: their X/Y coordinates are measured
+ * against the SAME stage, never against the full Hero height separately.
+ *
+ * The main portrait occupies the foreground; the five supporting expressions
+ * touch it visually along their edges. Desktop and mobile are tuned separately.
+ * No parallax: the collage keeps its deliberate silhouette while scrolling.
+ */
+type FacePosition = {
   src: string;
-  position: string;
-  appearance: string;
-  depth: number;
+  x: string;
+  y: string;
+  width: string;
+  angle: number;
+  layer: number;
+  tone: string;
 };
 
-// Все позиции заданы отдельными статическими Tailwind-классами.
-// На десктопе сохраняем композицию, но даём запас на поворот и параллакс:
-// никакая голова не должна опираться на край обрезающего контейнера.
-const desktopFaces: Face[] = [
+const DESKTOP_FACES: readonly FacePosition[] = [
+  // Quiet, distant expression connects the two upper portraits.
   {
     src: "/images/hero-faces/face-05.png",
-    position: "left-[62%] top-[6%] z-0 w-[clamp(135px,13vw,175px)] -rotate-[4deg]",
-    appearance: "opacity-40 brightness-[0.62] saturate-[0.65] blur-[0.7px]",
-    depth: 3,
+    x: "50%",
+    y: "19%",
+    width: "25%",
+    angle: -2,
+    layer: 1,
+    tone: "opacity-55 brightness-[0.66] saturate-[0.75]",
   },
+  // Broad expressions flank the central portrait and slightly tuck behind it.
   {
     src: "/images/hero-faces/face-02.png",
-    position: "left-[46%] top-[20%] z-20 w-[clamp(215px,21vw,290px)] -rotate-[5deg]",
-    appearance: "opacity-90 brightness-[0.84] saturate-[0.82]",
-    depth: 9,
+    x: "22%",
+    y: "44%",
+    width: "41%",
+    angle: -2,
+    layer: 5,
+    tone: "opacity-95 brightness-[0.86] saturate-[0.88]",
   },
   {
     src: "/images/hero-faces/face-01.png",
-    position: "right-[6%] top-[9%] z-10 w-[clamp(215px,20vw,285px)] rotate-[3deg]",
-    appearance: "opacity-85 brightness-[0.82] saturate-[0.85]",
-    depth: 7,
+    x: "79%",
+    y: "43%",
+    width: "40%",
+    angle: 2,
+    layer: 5,
+    tone: "opacity-95 brightness-[0.87] saturate-[0.9]",
   },
+  // The bottom expressions now TOUCH the group; no isolated heads at the foot.
   {
     src: "/images/hero-faces/face-04.png",
-    position: "left-[49%] top-[53%] z-10 w-[clamp(165px,16.5vw,220px)] rotate-[5deg]",
-    appearance: "opacity-70 brightness-[0.73] saturate-[0.75]",
-    depth: 5,
+    x: "28%",
+    y: "73%",
+    width: "29%",
+    angle: -2,
+    layer: 8,
+    tone: "opacity-90 brightness-[0.82] saturate-[0.86]",
   },
   {
     src: "/images/hero-faces/face-06.png",
-    position: "right-[6%] top-[52%] z-10 w-[clamp(175px,17.5vw,230px)] -rotate-[4deg]",
-    appearance: "opacity-75 brightness-[0.77] saturate-[0.8]",
-    depth: 6,
+    x: "76%",
+    y: "73%",
+    width: "30%",
+    angle: 2,
+    layer: 8,
+    tone: "opacity-93 brightness-[0.85] saturate-[0.9]",
   },
 ];
 
-// Мобильная композиция отдельная. Каждая голова находится с небольшим запасом
-// ВНУТРИ области Hero, даже с учётом наклона. Не выносим карточки за края:
-// внешние overflow-hidden нужны, чтобы не появлялась горизонтальная прокрутка.
-const mobileFaces: Omit<Face, "depth">[] = [
+const MOBILE_FACES: readonly FacePosition[] = [
   {
     src: "/images/hero-faces/face-05.png",
-    position: "left-1/2 top-[8%] z-[1] w-[min(28%,130px)] -translate-x-1/2 -rotate-[6deg]",
-    appearance: "opacity-30 brightness-[0.65] saturate-[0.6] blur-[0.5px]",
+    x: "50%",
+    y: "19%",
+    width: "26%",
+    angle: -2,
+    layer: 1,
+    tone: "opacity-60 brightness-[0.7] saturate-[0.8]",
   },
   {
     src: "/images/hero-faces/face-02.png",
-    position: "left-[5%] top-[16%] z-[5] w-[min(40%,185px)] -rotate-[7deg]",
-    appearance: "opacity-80 brightness-[0.82] saturate-[0.75]",
+    x: "23%",
+    y: "40%",
+    width: "43%",
+    angle: -2,
+    layer: 5,
+    tone: "opacity-95 brightness-[0.86] saturate-[0.88]",
   },
   {
     src: "/images/hero-faces/face-01.png",
-    position: "right-[5%] top-[15%] z-[5] w-[min(40%,185px)] rotate-[7deg]",
-    appearance: "opacity-80 brightness-[0.8] saturate-[0.8]",
+    x: "77%",
+    y: "40%",
+    width: "43%",
+    angle: 2,
+    layer: 5,
+    tone: "opacity-95 brightness-[0.87] saturate-[0.9]",
   },
   {
     src: "/images/hero-faces/face-04.png",
-    position: "bottom-[16%] left-[6%] z-[4] w-[min(34%,160px)] rotate-[7deg]",
-    appearance: "opacity-55 brightness-[0.72] saturate-[0.7]",
+    x: "25%",
+    y: "73%",
+    width: "34%",
+    angle: -2,
+    layer: 8,
+    tone: "opacity-88 brightness-[0.81] saturate-[0.85]",
   },
   {
     src: "/images/hero-faces/face-06.png",
-    position: "bottom-[17%] right-[6%] z-[4] w-[min(34%,160px)] -rotate-[7deg]",
-    appearance: "opacity-60 brightness-[0.76] saturate-[0.75]",
+    x: "75%",
+    y: "73%",
+    width: "34%",
+    angle: 2,
+    layer: 8,
+    tone: "opacity-92 brightness-[0.85] saturate-[0.9]",
   },
 ];
 
-export function HeroFaces() {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const desktopPointer = window.matchMedia(
-      "(min-width: 1024px) and (hover: hover) and (pointer: fine)",
-    );
-    const layers = Array.from(container.querySelectorAll<HTMLElement>("[data-parallax]"));
-
-    let frame: number | null = null;
-    let mouseX = 0;
-    let mouseY = 0;
-
-    const update = () => {
-      frame = null;
-      for (const layer of layers) {
-        const depth = Number(layer.dataset.parallax) || 0;
-        layer.style.transform = `translate3d(${(mouseX * depth).toFixed(2)}px, ${(mouseY * depth).toFixed(2)}px, 0)`;
-      }
-    };
-
-    const scheduleUpdate = () => {
-      if (frame === null) frame = window.requestAnimationFrame(update);
-    };
-
-    const reset = () => {
-      if (mouseX === 0 && mouseY === 0) return;
-      mouseX = 0;
-      mouseY = 0;
-      scheduleUpdate();
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse" || reducedMotion.matches || !desktopPointer.matches) {
-        reset();
-        return;
-      }
-
-      // Движение только при наведении на Hero, а не по всему окну браузера.
-      const rect = container.getBoundingClientRect();
-      if (
-        event.clientX < rect.left ||
-        event.clientX > rect.right ||
-        event.clientY < rect.top ||
-        event.clientY > rect.bottom ||
-        rect.width === 0 ||
-        rect.height === 0
-      ) {
-        reset();
-        return;
-      }
-
-      mouseX = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-      mouseY = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
-      scheduleUpdate();
-    };
-
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
-    window.addEventListener("blur", reset);
-    window.addEventListener("resize", reset, { passive: true });
-
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("blur", reset);
-      window.removeEventListener("resize", reset);
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      for (const layer of layers) layer.style.transform = "";
-    };
-  }, []);
-
-  // Переполнение обрезаем лишь как страховку от горизонтального скролла.
-  // Ниже все изображения находятся с запасом внутри границ коллажа.
+function PortraitLayer({ face, sizes }: { face: FacePosition; sizes: string }) {
   return (
     <div
-      ref={containerRef}
-      aria-label="Колаж творчих образів Слави Ніконорова"
-      role="img"
-      className="pointer-events-none absolute inset-0 z-10 overflow-hidden"
+      aria-hidden="true"
+      className="absolute -translate-x-1/2 -translate-y-1/2"
+      style={{
+        left: face.x,
+        top: face.y,
+        width: face.width,
+        zIndex: face.layer,
+      }}
     >
-      <style>{`
-        @keyframes heroPortraitFloat {
-          0%, 100% { transform: translate3d(0, 0, 0); }
-          50% { transform: translate3d(0, -5px, 0); }
-        }
+      <Image
+        src={face.src}
+        alt=""
+        width={420}
+        height={500}
+        sizes={sizes}
+        draggable={false}
+        style={{ transform: `rotate(${face.angle}deg)` }}
+        className={`block h-auto w-full object-contain drop-shadow-[0_18px_28px_rgba(0,0,0,0.47)] select-none ${face.tone}`}
+      />
+    </div>
+  );
+}
 
-        @media (prefers-reduced-motion: no-preference) {
-          .hero-portrait-floating {
-            animation: heroPortraitFloat 9s ease-in-out infinite;
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .hero-portrait-floating { animation: none !important; }
-          .hero-face-parallax { transition: none !important; }
-        }
-      `}</style>
-
-      {/* Подсветка, соединяющая отдельные головы в одну композицию. */}
+function PortraitGroup({
+  faces,
+  sizes,
+  mainWidth,
+}: {
+  faces: readonly FacePosition[];
+  sizes: string;
+  mainWidth: string;
+}) {
+  return (
+    <>
+      {/* Common light/shadow source merges six separate cutouts into one mass. */}
       <div
         aria-hidden="true"
-        className="absolute inset-x-[-5%] top-[5%] h-[90%] rounded-full bg-[radial-gradient(ellipse_at_50%_50%,rgba(155,85,48,0.19)_0%,transparent_67%)] blur-3xl lg:inset-x-auto lg:top-[8%] lg:left-[39%] lg:h-[84%] lg:w-[60%]"
+        className="absolute top-[54%] left-1/2 h-[76%] w-[86%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(151,83,49,0.22)_0%,rgba(69,35,24,0.15)_37%,transparent_72%)] blur-[34px]"
       />
+      {faces.map((face) => (
+        <PortraitLayer key={face.src} face={face} sizes={sizes} />
+      ))}
+      <div
+        aria-hidden="true"
+        className="absolute top-[53%] left-[51%] z-20 -translate-x-1/2 -translate-y-1/2"
+        style={{ width: mainWidth }}
+      >
+        <Image
+          src="/images/portrait.png"
+          alt=""
+          width={700}
+          height={760}
+          priority
+          sizes={sizes}
+          draggable={false}
+          className="block h-auto w-full object-contain drop-shadow-[0_28px_42px_rgba(0,0,0,0.55)] select-none"
+        />
+      </div>
+    </>
+  );
+}
 
-      {/* МОБИЛЬНАЯ И ПЛАНШЕТНАЯ ВЕРСИЯ: масштаб от размеров Hero. */}
-      <div aria-hidden="true" className="absolute inset-0 lg:hidden">
-        {mobileFaces.map((face) => (
-          <div key={face.src} className={`absolute origin-center ${face.position}`}>
-            <Image
-              src={face.src}
-              alt=""
-              width={350}
-              height={420}
-              sizes="(max-width: 639px) 45vw, (max-width: 1023px) 210px, 0px"
-              className={`block h-auto w-full object-contain drop-shadow-[0_15px_28px_rgba(0,0,0,0.48)] select-none ${face.appearance}`}
-            />
-          </div>
-        ))}
-
-        {/* Небольшое затемнение у основания: переход к следующему блоку Hero. */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 z-[35] h-[14%] bg-gradient-to-t from-site-bg/30 via-site-bg/5 to-transparent"
+export function HeroFaces() {
+  return (
+    <div
+      role="img"
+      aria-label="Шість образів Слави Ніконорова в кінематографічному колажі"
+      className="pointer-events-none absolute inset-0 z-10 overflow-hidden"
+    >
+      {/* Mobile & tablet: same tight portrait group, scaled down together. */}
+      <div
+        aria-hidden="true"
+        className="absolute top-1/2 left-1/2 h-full w-full max-w-[540px] -translate-x-1/2 -translate-y-1/2 lg:hidden"
+      >
+        <PortraitGroup
+          faces={MOBILE_FACES}
+          sizes="(max-width: 639px) 48vw, (max-width: 1023px) 250px, 0px"
+          mainWidth="73%"
         />
       </div>
 
-      {/* DESKTOP: второстепенные образы слегка растворяются в фоне слева и справа. */}
+      {/* Desktop: the whole collage has one consistent aspect ratio. */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 hidden lg:block"
-        style={{
-          maskImage: "linear-gradient(to right, transparent 31%, black 42%, black 100%)",
-          WebkitMaskImage: "linear-gradient(to right, transparent 31%, black 42%, black 100%)",
-        }}
+        className="absolute top-1/2 right-[1%] hidden aspect-[1.11] w-[54%] max-w-[760px] -translate-y-1/2 lg:block xl:w-[57%]"
       >
-        {desktopFaces.map((face) => (
-          <div key={face.src} className={`absolute origin-center ${face.position}`}>
-            <div
-              data-parallax={face.depth}
-              className="hero-face-parallax transition-transform duration-500 ease-out will-change-transform"
-            >
-              <Image
-                src={face.src}
-                alt=""
-                width={420}
-                height={500}
-                sizes="(min-width: 1024px) 330px, 0px"
-                className={`block h-auto w-full object-contain drop-shadow-[0_22px_40px_rgba(0,0,0,0.45)] select-none ${face.appearance}`}
-              />
-            </div>
-          </div>
-        ))}
+        <PortraitGroup
+          faces={DESKTOP_FACES}
+          sizes="(min-width: 1440px) 350px, (min-width: 1024px) 28vw, 0px"
+          mainWidth="63%"
+        />
       </div>
 
-      {/* ГЛАВНЫЙ ПОРТРЕТ: крупный, но оставляет боковые головы видимыми. */}
-      <div className="absolute bottom-[9%] left-1/2 z-30 w-[min(74%,345px)] -translate-x-1/2 sm:bottom-[6%] sm:w-[min(68%,385px)] lg:top-[12%] lg:bottom-auto lg:left-[54%] lg:w-[clamp(395px,37vw,500px)] lg:translate-x-0 xl:top-[11%] xl:left-[53%]">
-        <div
-          data-parallax={5}
-          className="hero-face-parallax transition-transform duration-500 ease-out lg:will-change-transform"
-        >
-          <div className="hero-portrait-floating">
-            <Image
-              src="/images/portrait.png"
-              alt=""
-              width={700}
-              height={760}
-              priority
-              sizes="(max-width: 639px) 74vw, (max-width: 1023px) 385px, (max-width: 1350px) 37vw, 500px"
-              className="block h-auto w-full rotate-[1deg] object-contain drop-shadow-[0_30px_48px_rgba(0,0,0,0.55)] select-none"
-            />
-          </div>
-        </div>
-      </div>
+      {/* The collage fades into the page without cutting heads at the bottom. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 z-30 h-[5%] bg-gradient-to-t from-site-bg/25 to-transparent"
+      />
     </div>
   );
 }
